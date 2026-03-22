@@ -1,0 +1,102 @@
+{
+  "location": {
+    "neighborhood": "Broad Ripple",
+    "city": "Indianapolis",
+    "state": "IN",
+    "zip": "46220"
+  },
+  "stores": {
+    "kroger": {
+      "store_id": "01400441",
+      "weekly_ad_store_ids": ["02100959", "02100998"],
+      "name": "Kroger",
+      "address": "2629 E 65th St, Indianapolis, IN 46220",
+      "note": "Confirm store_id via KrogerScraper.find_stores('46220', config)"
+    },
+    "walmart": {
+      "store_id": "2787",
+      "name": "Walmart Supercenter #2787",
+      "address": "7325 N Keystone Ave, Indianapolis, IN 46240",
+      "note": "Confirmed via walmart.com/store/2787-indianapolis-in"
+    },
+    "meijer": {
+      "store_id": "290",
+      "name": "Meijer",
+      "address": "5550 N Keystone Ave, Indianapolis, IN 46220",
+      "note": "Store ID from meijer.com/shopping/store-locator/290.html — verify via DevTools"
+    },
+    "fresh_thyme": {
+      "store_id": "208",
+      "name": "Fresh Thyme Market — Broad Ripple",
+      "address": "6301 N College Ave, Indianapolis, IN 46220",
+      "note": "rsid=208 confirmed via weekly circular URL for Broad Ripple"
+    },
+    "target": {
+      "store_id": "2391",
+      "name": "Target",
+      "address": "Indianapolis area",
+      "note": "Confirmed from promo ID pattern 2391-YYYYMMDD; run TargetScraper.find_store_id() to verify address"
+    },
+    "aldi": {
+      "store_id": "444-086",
+      "name": "Aldi",
+      "address": "1440 E. 86th St, Indianapolis, IN 46240",
+      "note": "Spryker service-point ID format 444-NNN; run AldiScraper.find_store_id('46220') for nearby options"
+    },
+    "whole_foods": {
+      "store_id": "10378",
+      "name": "Whole Foods Market — Eighty-Sixth St.",
+      "address": "Eighty-Sixth St., Indianapolis, IN",
+      "note": "Store ID from __NEXT_DATA__ on wholefoodsmarket.com; prices are national (same across all WFM stores)"
+    },
+    "harvest_market": {
+      "store_id": "17",
+      "name": "Niemann Harvest Market — Carmel",
+      "address": "2140 E 116th St, Carmel, IN 46032",
+      "note": "Webstop retailer 3328, store_number=584; run HarvestMarketScraper.find_store_id('46032')"
+    },
+    "giant_eagle": {
+      "store_id": "6550",
+      "store_slug": "carmel-bridges",
+      "name": "Giant Eagle Market District — Carmel",
+      "address": "11505 N Illinois St, Carmel, IN 46032",
+      "note": "storeCode=6550 for GraphQL GetProducts; storeSlug=carmel-bridges for CircularsQuery"
+    },
+    "gfs": {
+      "store_id": "1905",
+      "mp_number": "MP153",
+      "slug": "fishers",
+      "name": "Gordon Food Service Store — Indianapolis",
+      "address": "9540 Masters Rd, Indianapolis, IN 46250",
+      "note": "URL slug is 'fishers' but address is Indianapolis 46250; foodservice/wholesale bulk items. mp_number required for store cookie selection."
+    },
+    "fresh_market": {
+      "store_ids": {
+        "146th": {
+          "store_id": "56",
+          "name": "The Fresh Market — 146th St",
+          "address": "2490 E 146th St, Carmel, IN 46033"
+        },
+        "rangeline": {
+          "store_id": "247",
+          "name": "The Fresh Market — Rangeline",
+          "address": "1392 S Rangeline Rd, Carmel, IN 46032"
+        }
+      },
+      "note": "Both Indiana locations share the same national deal board (~27 items/week)"
+    },
+    "costco": {
+      "store_id": "346",
+      "name": "Costco Castleton #346",
+      "address": "6110 E 86th St, Indianapolis, IN 46250",
+      "note": "Online prices only — in-warehouse shelf prices not published. Requires Playwright."
+    },
+    "needlers": {
+      "store_id": "1000-6062",
+      "store_number": "929",
+      "name": "Needler's Fresh Market — Lockerbie",
+      "address": "Lockerbie, Indianapolis, IN",
+      "note": "storebyweb.com store_id=1000-6062; weekly circular via NeedlersCircularScraper (requires ANTHROPIC_API_KEY)"
+    }
+  }
+}

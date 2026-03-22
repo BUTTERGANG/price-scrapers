@@ -1,0 +1,11 @@
+curl-cffi>=0.7.0           # TLS fingerprint impersonation (Akamai/PerimeterX bypass) — Walmart, Meijer, The Fresh Market
+parsel>=1.9.0              # HTML parsing — Fresh Thyme product search
+playwright>=1.43.0         # Headless browser — Costco only
+playwright-stealth>=1.0.6  # Removes headless browser detection signals — Costco only
+requests>=2.31.0           # HTTP — Kroger, Fresh Thyme (Flipp), Meijer (Flipp), Target, Aldi
+python-dotenv>=1.0.0       # Load .env for API keys
+loguru>=0.7.0              # Logging
+python-telegram-bot>=20.0  # Telegram bot interface (telegram_bot.py)
+anthropic>=0.20.0          # Claude API — /ask command in bot + Needlers circular vision scraper
+fastapi>=0.110.0           # Web API backend
+uvicorn>=0.29.0            # Web API server

@@ -1,0 +1,20 @@
+{
+  "_comment": "Search queries to run against each retailer. Add items you regularly buy.",
+  "queries": [
+    "milk",
+    "eggs",
+    "bread",
+    "butter",
+    "chicken breast",
+    "ground beef",
+    "bananas",
+    "apples",
+    "orange juice",
+    "coffee",
+    "pasta",
+    "rice",
+    "olive oil",
+    "cheddar cheese",
+    "yogurt"
+  ]
+}
