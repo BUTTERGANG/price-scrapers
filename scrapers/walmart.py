@@ -8,6 +8,7 @@ Install: pip install curl-cffi parsel
 """
 import json
 import logging
+import re
 from typing import Optional
 
 from parsel import Selector
@@ -93,10 +94,13 @@ class WalmartScraper(BaseScraper):
             except (ValueError, TypeError):
                 price = 0.0
             if not price:
-                line = str(price_info.get("linePrice") or "").lstrip("$")
+                line = str(price_info.get("linePrice") or "").strip()
+                # linePrice can be a range ("$3.47 - $5.00") or multi-unit ("2 for $5.00")
+                # Take the lower bound / first number found
+                m = re.search(r"\$?([\d]+\.[\d]+|[\d]+)", line)
                 try:
-                    price = float(line) if line else 0.0
-                except ValueError:
+                    price = float(m.group(1)) if m else 0.0
+                except (ValueError, AttributeError):
                     price = 0.0
 
             # unitPrice is now a formatted display string e.g. "5.4 ¢/fl oz"
@@ -163,10 +167,18 @@ class WalmartScraper(BaseScraper):
             .get("product", {})
         )
         price_info = product.get("priceInfo", {})
-        was = price_info.get("wasPrice", {})
+        was = price_info.get("wasPrice") or {}
+        current_price = price_info.get("currentPrice") or {}
+        current = current_price.get("price", 0.0)
+        was_val = was.get("price") if was else None
+        # Correct semantics: was_price = regular shelf price, current = sale price when on sale
+        if was_val:
+            regular_price, sale_price = was_val, current
+        else:
+            regular_price, sale_price = current, None
         return self.normalize_price(
             product_id=product_id,
             name=product.get("name", ""),
-            price=price_info.get("currentPrice", {}).get("price", 0.0),
-            extra={"sale_price": was.get("price") if was else None},
+            price=regular_price,
+            extra={"sale_price": sale_price},
         )

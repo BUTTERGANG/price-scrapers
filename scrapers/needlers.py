@@ -232,10 +232,24 @@ class NeedlersScraper(BaseScraper):
         if divider > 1:
             deal_text = f"{divider}/${actual_price:.2f}".rstrip("0").rstrip(".")
 
+        # When actualPrice is 0 or None, the item is a text-only promo (BOGO,
+        # multi-unit, etc.) with no numeric shelf price. Emit price=None so the
+        # record is identifiable as a text-only deal and is not silently dropped
+        # by > 0 filters in queries.
+        if unit_price is not None:
+            computed_price = unit_price
+        elif actual_price:
+            computed_price = actual_price
+        else:
+            computed_price = None
+
+        raw_dept = item.get("department") or None
+        department = raw_dept.title() if raw_dept else None
+
         return self.normalize_price(
             product_id=item.get("id", ""),
             name=item.get("name", ""),
-            price=unit_price if unit_price is not None else actual_price,
+            price=computed_price,
             unit=unit,
             url=f"{BASE_URL}/s/{self.store_id}/b",
             upc=item.get("scanCode") or None,  # scanCode is the UPC barcode
@@ -243,7 +257,7 @@ class NeedlersScraper(BaseScraper):
                 "deal_text": deal_text,
                 "brand": item.get("brand") or None,
                 "size": item.get("size") or None,
-                "department": item.get("department") or None,
+                "department": department,
                 "department_id": item.get("departmentId") or None,
                 "out_of_stock": item.get("outOfStock", False),
             },

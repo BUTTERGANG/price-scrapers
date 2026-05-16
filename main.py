@@ -7,7 +7,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from runner import available_retailers, run_all, run_retailers
-from utils import best_price_per_retailer, find_deals, get_conn, last_successful_run
+from utils import best_price_per_retailer, find_deals, get_conn, release_conn, init_db, last_successful_run
+from utils.compare import find_text_deals
 
 load_dotenv()
 
@@ -55,26 +56,28 @@ def main():
             print(f"  {name}")
         return
 
-    conn = get_conn()
+    init_db()
 
     if args.retailers:
         all_results = run_retailers(
-            args.retailers, STORES["stores"], ITEMS["queries"], conn,
+            args.retailers, STORES["stores"], ITEMS["queries"],
             workers=args.workers,
         )
     else:
-        all_results = run_all(STORES["stores"], ITEMS["queries"], conn, workers=args.workers)
+        all_results = run_all(STORES["stores"], ITEMS["queries"], workers=args.workers)
 
-    _print_staleness(conn)
+    conn = get_conn()
+    try:
+        _print_staleness(conn)
+    finally:
+        release_conn(conn)
 
     if not all_results:
         logger.warning("No results collected this run.")
-        conn.close()
         return
 
     logger.info(f"Total records this run: {len(all_results)}")
     _print_summary(all_results)
-    conn.close()
 
 
 def _print_staleness(conn) -> None:
@@ -94,13 +97,33 @@ def _print_summary(results: list[dict]) -> None:
             print(f"  {retailer:20s}  ${effective:.2f}{tag}  {item['name']}")
 
     print("\n=== Current deals (sale < regular) ===")
-    for deal in find_deals(results)[:10]:
-        pct = round((deal["savings"] / deal["price"]) * 100)
-        print(
-            f"  {deal['retailer']:20s}  "
-            f"${deal['sale_price']:.2f} (was ${deal['price']:.2f}, -{pct}%)  "
-            f"{deal['name']}"
-        )
+    price_deals = find_deals(results)
+    if price_deals:
+        for deal in price_deals[:10]:
+            pct = round((deal["savings"] / deal["price"]) * 100)
+            print(
+                f"  {deal['retailer']:20s}  "
+                f"${deal['sale_price']:.2f} (was ${deal['price']:.2f}, -{pct}%)  "
+                f"{deal['name']}"
+            )
+    else:
+        print("  (none)")
+
+    print("\n=== Promotional deals (BOGO, % off, multi-unit, etc.) ===")
+    text_deals = find_text_deals(results)
+    if text_deals:
+        for retailer in sorted(text_deals):
+            items = text_deals[retailer]
+            print(f"  {retailer}")
+            for item in items[:5]:
+                deal_text = item.get("deal_text", "")
+                price = item.get("price") or 0.0
+                price_str = f"${price:.2f}" if price else "price n/a"
+                print(f"    {price_str:9s}  [{deal_text}]  {item['name'][:55]}")
+            if len(items) > 5:
+                print(f"    ... and {len(items) - 5} more")
+    else:
+        print("  (none)")
 
 
 if __name__ == "__main__":

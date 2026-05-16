@@ -117,7 +117,7 @@ def validate_results(
                 f"(product_id={pid!r}) — possible parse error"
             )
 
-        if 0 < price > _PRICE_MAX:
+        if price > _PRICE_MAX:
             issues.append(
                 f"[{retailer}] WARN: unusually high price ${price:.2f} "
                 f"for {name!r} — verify this isn't a parse artifact"
@@ -153,7 +153,7 @@ def check_count_drop(
         last_count: records_saved from the last successful run (None = no history).
         threshold:  Fraction below which a drop triggers a warning (default 0.5 = 50%).
     """
-    if not last_count:
+    if last_count is None:
         return None
     if new_count < last_count * threshold:
         pct = round(100.0 * new_count / last_count)

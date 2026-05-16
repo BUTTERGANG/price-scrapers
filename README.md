@@ -1,6 +1,6 @@
 # Grocery Price Scrapers
 
-Automated price collection for grocery retailers near **Broad Ripple, Indianapolis (ZIP 46220)**. Prices are stored in a SQLite database enabling trend tracking, sale detection, and cross-retailer comparison.
+Automated price collection for grocery retailers near **Broad Ripple, Indianapolis (ZIP 46220)**. Prices are stored in a PostgreSQL database (NeonDB) enabling trend tracking, sale detection, and cross-retailer comparison. A React dashboard and FastAPI backend provide real-time search, deal discovery, and price comparison across all retailers.
 
 ---
 
@@ -10,10 +10,10 @@ Automated price collection for grocery retailers near **Broad Ripple, Indianapol
 |---|---|---|---|---|
 | Kroger | `01400441` | 2629 E 65th St, Indianapolis 46220 | **Working** | Official public OAuth2 API |
 | Kroger Weekly Ad | `02100959` / `02100998` | — | **Working** | DACS public API (no credentials) |
-| Walmart | `2787` | 7325 N Keystone Ave, Indianapolis 46240 | **Working** | `curl_cffi` (safari17_0) + `__NEXT_DATA__` HTML parsing |
+| Walmart | `2787` | 7325 N Keystone Ave, Indianapolis 46240 | **Blocked** | `curl_cffi` (safari17_0) + `__NEXT_DATA__` HTML parsing — bot detection from datacenter IPs |
 | Fresh Thyme | `rsid=208` | 6301 N College Ave, Indianapolis 46220 | **Working** | HTML parsing (search) + Flipp REST API (circular) |
 | Meijer | `290` | 5550 N Keystone Ave, Indianapolis 46220 | **Working** | `curl_cffi` + AEM JSON API + Flipp REST API (circular) |
-| Costco | `346` | 6110 E 86th St, Indianapolis 46250 | **Working** | Playwright stealth → intercept `search.costco.com` ⚠️ online prices only |
+| Costco | `346` | 6110 E 86th St, Indianapolis 46250 | **Blocked** | Playwright stealth → intercept `search.costco.com` ⚠️ online prices only — bot detection from datacenter IPs |
 | Target | `2391` | Indianapolis area | **Working** | Plain `requests` + `api.target.com` weekly ads API |
 | The Fresh Market | `56` / `247` | Carmel, IN (both) | **Working** | `curl_cffi` + `__NEXT_DATA__` JSON parsing |
 | Aldi | `444-086` | 1440 E. 86th St, Indianapolis 46240 | **Working** | Plain `requests` + Flipp REST API |
@@ -56,8 +56,8 @@ PRICE_SCRAPERS/
 │   └── needlers_circular.py  # Needler's — vision-based circular parsing via Claude AI
 ├── utils/
 │   ├── http.py               # TLS-fingerprint-safe sessions, retry/backoff, jitter
-│   ├── browser.py            # Playwright stealth browser for Costco
-│   ├── db.py                 # SQLite price history database
+│   ├── browser.py            # Playwright stealth browser for Costco (auto-configures Nix libs on Replit)
+│   ├── db.py                 # PostgreSQL (NeonDB) price history database
 │   ├── unit_price.py         # Unit price normalization ($/oz, $/lb, $/fl_oz, $/ct)
 │   ├── validate.py           # Data quality validation (before DB insert)
 │   └── compare.py            # In-memory price comparison helpers (current run)
@@ -67,13 +67,19 @@ PRICE_SCRAPERS/
 ├── config/
 │   ├── stores.json           # Store IDs and addresses
 │   └── items.json            # Search queries (grocery items to track)
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx           # React dashboard (Deals, Search, Compare, History, Stores)
+│   │   └── index.css         # Dashboard styling
+│   └── vite.config.js        # Vite dev server (port 5000, proxies /api → port 8000)
 ├── data/
-│   ├── raw/                  # Raw API/HTML responses, one subdir per retailer
-│   └── prices.db             # SQLite price history database
+│   └── raw/                  # Raw API/HTML responses, one subdir per retailer
 ├── main.py                   # CLI entry point
 ├── runner.py                 # Scraper orchestration (serial + parallel)
+├── server.py                 # FastAPI backend (port 8000) — REST API for dashboard
 ├── telegram_bot.py           # Telegram bot interface (/price, /deals, /compare, /ask)
 ├── smoke_test.py             # Quick live smoke test
+├── replit.nix                # Nix system dependencies (Chromium libs for Playwright)
 ├── requirements.txt
 └── .env.example
 ```
@@ -86,18 +92,20 @@ PRICE_SCRAPERS/
 
 ```bash
 pip install -r requirements.txt
-playwright install chromium   # only needed for Costco
+playwright install chromium       # only needed for Costco scraper
+cd frontend && npm install && cd ..  # React dashboard
 ```
 
-**requirements.txt:**
+**Key Python dependencies:**
 ```
 curl-cffi>=0.7.0           # TLS fingerprint impersonation — Walmart, Meijer, The Fresh Market, Whole Foods, Giant Eagle
 parsel>=1.9.0              # HTML parsing — Fresh Thyme, GFS, Harvest Market
 playwright>=1.43.0         # Headless browser — Costco only
-playwright-stealth>=1.0.6  # Removes headless browser detection signals
+playwright-stealth          # Removes headless browser detection signals
 requests>=2.31.0           # HTTP — Kroger, Fresh Thyme (Flipp), Meijer (Flipp), Target, Aldi
+psycopg2-binary            # PostgreSQL driver (NeonDB)
 python-dotenv>=1.0.0       # Load .env for API keys
-loguru>=0.7.0              # Structured logging
+fastapi + uvicorn          # REST API backend
 python-telegram-bot>=20.0  # Telegram bot interface
 anthropic>=0.20.0          # Claude API — /ask command in Telegram bot + Needlers circular vision scraper
 ```
@@ -111,6 +119,12 @@ cp .env.example .env
 ```
 
 ```ini
+# PostgreSQL — NeonDB connection string (primary database)
+NEONDB1=postgresql://user:pass@host/dbname?sslmode=require
+
+# Falls back to Replit's built-in Postgres if NEONDB1 is not set
+# DATABASE_URL=postgresql://postgres:password@helium/heliumdb?sslmode=disable
+
 # Kroger Developer API — register free at https://developer.kroger.com
 KROGER_CLIENT_ID=your_client_id_here
 KROGER_CLIENT_SECRET=your_client_secret_here
@@ -169,6 +183,44 @@ python main.py --workers 1
 # List all available retailer names
 python main.py --list
 ```
+
+---
+
+## Web Dashboard
+
+The React frontend provides a full-featured price dashboard at `http://localhost:5000`:
+
+| Tab | Description |
+|-----|-------------|
+| **Deals** | Active sales filtered by minimum discount % |
+| **Search** | Search products across all retailers, shows cheapest per retailer |
+| **Compare** | Unit price comparison table sorted by best value |
+| **History** | Price history grouped by retailer |
+| **Stores** | Scraper status, last run times, and a "Run All Scrapers" button |
+
+### Running the dashboard
+
+```bash
+# Start both frontend and backend (Replit "Project" workflow runs both)
+python server.py &                        # Backend API on port 8000
+cd frontend && npm run dev                # React dashboard on port 5000
+```
+
+The Vite dev server proxies all `/api/*` requests to the backend (`http://127.0.0.1:8000`).
+
+### REST API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/status` | GET | Health check + DB statistics (total prices, retailers, runs) |
+| `/api/stores` | GET | Store run status (last run time, records saved, errors) |
+| `/api/deals?min_pct=10` | GET | Active sales above a discount threshold |
+| `/api/search?q=milk` | GET | Cheapest price per retailer for a product |
+| `/api/compare?q=eggs` | GET | Unit price comparison sorted by best value |
+| `/api/history?q=chicken` | GET | Price history by name search |
+| `/api/history?retailer=X&product_id=Y` | GET | Price history for a specific product |
+| `/api/upc/{upc}` | GET | Cross-retailer UPC barcode lookup |
+| `/api/scrape` | POST | Trigger a background scrape run (4 parallel workers) |
 
 ---
 
@@ -306,7 +358,8 @@ The weekly circular is available via Kroger's DACS (Digital Ads & Coupons System
 ### Walmart
 
 - **Method:** `__NEXT_DATA__` JSON blob embedded in every search/product page
-- **TLS fingerprinting (2026):** Chrome TLS profiles are now fully blocked by Walmart's PerimeterX stack. `curl_cffi` must use `safari17_0` or `safari16_5` impersonation. `chrome*` profiles return a "Robot or human?" challenge page with no product data.
+- **TLS fingerprinting (2026):** Chrome TLS profiles are now fully blocked by Walmart's PerimeterX stack. `curl_cffi` must use `safari17_0` or `safari15_5` impersonation (`safari16_5` is broken in current curl_cffi). `chrome*` profiles return a "Robot or human?" challenge page with no product data.
+- **Environment note:** Walmart actively blocks datacenter/cloud IPs (including Replit). Requires a residential proxy or local execution to bypass bot detection.
 - **Session warmup:** Hits homepage first to receive Akamai validation cookies (`bm_sz`, `_abck`)
 - **Store pricing:** Set via `assortment_store_id` cookie
 - **Price schema (2026 changes):**

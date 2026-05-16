@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 # by Walmart's PerimeterX stack as of early 2026 — Safari bypasses it).
 _IMPERSONATE_OPTIONS = [
     "safari17_0",
-    "safari16_5",
     "chrome120",
     "chrome116",
+    "safari15_5",
 ]
 
 
@@ -115,7 +115,11 @@ def request_with_retry(
                 resp.raise_for_status()  # raise immediately, no retry
 
             if resp.status_code in retry_on:
-                retry_after = int(resp.headers.get("Retry-After", delay))
+                try:
+                    retry_after = int(resp.headers.get("Retry-After", delay))
+                except (ValueError, TypeError):
+                    # Retry-After can be an HTTP-date string; fall back to current delay
+                    retry_after = int(delay)
                 wait = max(retry_after, delay)
                 logger.warning(
                     f"[{url}] HTTP {resp.status_code} on attempt {attempt + 1}. "

@@ -6,16 +6,39 @@ reporting on the results of a single scraper run without querying the DB.
 For historical queries (trends, lowest-ever price, active deals across all
 past runs) use the DB functions in utils/db.py instead.
 """
+import json
 from typing import Optional
 
 from utils.unit_price import format_unit_price
 
 
+def _effective_price(r: dict) -> float:
+    """Return the real shelf price: sale_price when set (even $0), else price."""
+    sale = r.get("sale_price")
+    if sale is not None:
+        return sale
+    return r.get("price") or float("inf")
+
+
+def _get_deal_text(r: dict) -> Optional[str]:
+    """Return deal_text from top-level field or from extra_json (DB round-trip)."""
+    if r.get("deal_text"):
+        return r["deal_text"]
+    raw = r.get("extra_json")
+    if raw:
+        try:
+            extra = json.loads(raw) if isinstance(raw, str) else raw
+            return extra.get("deal_text") or extra.get("sale_story") or None
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
 def compare_by_name(records: list[dict], query: str) -> list[dict]:
-    """Filter records whose name contains query (case-insensitive), sorted by price."""
+    """Filter records whose name contains query (case-insensitive), sorted by effective price."""
     q = query.lower()
     matches = [r for r in records if q in r.get("name", "").lower()]
-    return sorted(matches, key=lambda r: r.get("price") or float("inf"))
+    return sorted(matches, key=_effective_price)
 
 
 def compare_by_unit_price(
@@ -67,8 +90,8 @@ def print_unit_price_comparison(records: list[dict], query: str) -> None:
             label = canon or "no unit"
             print(f"\n  [{label}]")
         up = format_unit_price(r) or "  n/a  "
-        effective = r.get("sale_price") or r.get("price") or 0.0
-        sale_tag = " (SALE)" if r.get("sale_price") else ""
+        effective = _effective_price(r) if _effective_price(r) != float("inf") else 0.0
+        sale_tag = " (SALE)" if r.get("sale_price") is not None else ""
         print(
             f"  {r.get('retailer', ''):18s}  "
             f"${effective:.2f}{sale_tag:7s}  "
@@ -82,9 +105,36 @@ def find_deals(records: list[dict]) -> list[dict]:
     for r in records:
         sale = r.get("sale_price")
         regular = r.get("price")
-        if sale and regular and sale < regular:
+        # Use `is not None` so sale_price=0 (BOGO free) is included
+        if sale is not None and regular and sale < regular:
             deals.append({**r, "savings": round(regular - sale, 2)})
     return sorted(deals, key=lambda r: r["savings"], reverse=True)
+
+
+def find_text_deals(records: list[dict]) -> dict[str, list[dict]]:
+    """Return items that have a deal_text label (BOGO, % off, multi-unit, etc.),
+    grouped by retailer.  Items already captured by find_deals() (where
+    sale_price < price) are excluded to avoid duplication.
+
+    Returns:
+        dict mapping retailer name → list of matching records (unsorted).
+    """
+    already_dealt = {
+        (r["retailer"], r["product_id"])
+        for r in records
+        if r.get("sale_price") is not None and r.get("price") and r["sale_price"] < r["price"]
+    }
+
+    grouped: dict[str, list[dict]] = {}
+    for r in records:
+        if not _get_deal_text(r):
+            continue
+        key = (r.get("retailer", ""), r.get("product_id", ""))
+        if key in already_dealt:
+            continue
+        retailer = r.get("retailer", "unknown")
+        grouped.setdefault(retailer, []).append(r)
+    return grouped
 
 
 def best_price_per_retailer(records: list[dict], query: str) -> dict[str, Optional[dict]]:

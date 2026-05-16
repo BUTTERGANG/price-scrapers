@@ -63,7 +63,7 @@ _scrape_lock = threading.Lock()
 # ---------------------------------------------------------------------------
 
 def _current_prices(item: str, retailer: Optional[str] = None) -> list[dict]:
-    from utils import get_conn, cheapest_per_retailer
+    from utils import get_conn, release_conn, cheapest_per_retailer
     conn = get_conn()
     try:
         rows = cheapest_per_retailer(conn, item)
@@ -71,11 +71,11 @@ def _current_prices(item: str, retailer: Optional[str] = None) -> list[dict]:
             rows = [r for r in rows if r.get("retailer") == retailer]
         return rows
     finally:
-        conn.close()
+        release_conn(conn)
 
 
 def _active_deals(min_pct: float = 10.0, retailer: Optional[str] = None) -> list[dict]:
-    from utils import get_conn, find_active_deals
+    from utils import get_conn, release_conn, find_active_deals
     conn = get_conn()
     try:
         deals = find_active_deals(conn, min_pct)
@@ -83,12 +83,12 @@ def _active_deals(min_pct: float = 10.0, retailer: Optional[str] = None) -> list
             deals = [d for d in deals if d.get("retailer") == retailer]
         return deals
     finally:
-        conn.close()
+        release_conn(conn)
 
 
 def _unit_price_rows(item: str) -> list[dict]:
     """Query DB for recent records with a normalized unit price for the given item."""
-    from utils import get_conn
+    from utils import get_conn, release_conn
     conn = get_conn()
     try:
         rows = conn.execute(
@@ -114,7 +114,7 @@ def _unit_price_rows(item: str) -> list[dict]:
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
-        conn.close()
+        release_conn(conn)
 
 
 def _weekly_specials(category_hint: Optional[str] = None) -> list[dict]:
@@ -124,7 +124,7 @@ def _weekly_specials(category_hint: Optional[str] = None) -> list[dict]:
     is the foundation for budget planning and recipe suggestions.
     Parses extra_json so deal_text/sale_story are accessible at the top level.
     """
-    from utils import get_conn
+    from utils import get_conn, release_conn
     conn = get_conn()
     try:
         params: list = []
@@ -172,13 +172,13 @@ def _weekly_specials(category_hint: Optional[str] = None) -> list[dict]:
             results.append(r)
         return results
     finally:
-        conn.close()
+        release_conn(conn)
 
 
 def _last_run_times() -> dict[str, Optional[str]]:
     """Return {retailer: finished_at} for the last successful run of each retailer."""
     from runner import available_retailers
-    from utils import get_conn, last_successful_run
+    from utils import get_conn, release_conn, last_successful_run
     conn = get_conn()
     try:
         retailers = available_retailers(STORES["stores"])
@@ -187,7 +187,7 @@ def _last_run_times() -> dict[str, Optional[str]]:
             for r in retailers
         }
     finally:
-        conn.close()
+        release_conn(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -571,15 +571,12 @@ async def cmd_scrape(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     )
 
     async def _run_scrape():
-        conn = None
         try:
-            from utils import get_conn
-            conn = get_conn()
             workers = min(4, len(to_start))
             results = await loop.run_in_executor(
                 None,
                 lambda: run_retailers(
-                    to_start, STORES["stores"], ITEMS["queries"], conn,
+                    to_start, STORES["stores"], ITEMS["queries"],
                     workers=workers,
                 ),
             )
@@ -593,8 +590,6 @@ async def cmd_scrape(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         finally:
             with _scrape_lock:
                 _active_scrapes.difference_update(to_start)
-            if conn:
-                conn.close()
 
     asyncio.create_task(_run_scrape())
 

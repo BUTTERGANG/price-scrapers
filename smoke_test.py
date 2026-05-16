@@ -64,8 +64,12 @@ def test_meijer():
 # ── Needlers ─────────────────────────────────────────────────────────────────
 def test_needlers():
     from scrapers.needlers import NeedlersScraper
-    s = NeedlersScraper(dry_run=False)
-    return s.run()
+    s = NeedlersScraper(store_id="1000-6062", config={})
+    # Search a few common grocery items
+    results = []
+    for q in ["milk", "eggs", "bread"]:
+        results.extend(s.search_products(q))
+    return results
 
 
 if __name__ == "__main__":

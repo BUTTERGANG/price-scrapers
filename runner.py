@@ -1,18 +1,13 @@
 """Scraper orchestration — runs retailer scrapers with DB logging."""
 import inspect
 import logging
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
-from utils import finish_run, insert_many, last_successful_run, start_run
+from utils import finish_run, insert_many, last_successful_run, start_run, get_conn, release_conn
 from utils.validate import check_count_drop, validate_results
 
 logger = logging.getLogger(__name__)
-
-# Single write lock shared across all threads.
-# Reads (last_successful_run) don't need it; only DB writes do.
-_write_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -28,13 +23,11 @@ def _build_registry(stores: dict) -> dict:
     """
     from scrapers import (
         AldiScraper,
-        CostcoScraper,
         FreshThymeScraper,
         GFSScraper,
         KrogerScraper,
         MeijerScraper,
         TargetScraper,
-        WalmartScraper,
     )
     from scrapers.fresh_market import FreshMarketScraper
     from scrapers.giant_eagle import GiantEagleScraper
@@ -48,18 +41,22 @@ def _build_registry(stores: dict) -> dict:
     kroger_cfg = stores.get("kroger", {})
     for loc_id in kroger_cfg.get("weekly_ad_store_ids", []):
         key = f"kroger_weekly_{loc_id}"
-        def _kroger_circular(lid=loc_id):
-            s = KrogerScraper(store_id=lid, config={})
-            return s.scrape_circular(location_id=lid)
-        registry[key] = _kroger_circular
+        def _make_kroger(lid):
+            def _kroger_circular():
+                s = KrogerScraper(store_id=lid, config={})
+                return s.scrape_circular(location_id=lid)
+            return _kroger_circular
+        registry[key] = _make_kroger(loc_id)
 
     # ── Walmart ─────────────────────────────────────────────────────────────
-    if "walmart" in stores:
-        def _walmart(items):
-            s = WalmartScraper(store_id=stores["walmart"]["store_id"], config={})
-            s.authenticate()
-            return s.scrape_items(items)
-        registry["walmart"] = _walmart
+    # Disabled: PerimeterX bot detection blocks requests from datacenter IPs.
+    # Re-enable when a residential proxy or alternative API is available.
+    # if "walmart" in stores:
+    #     def _walmart(items):
+    #         s = WalmartScraper(store_id=stores["walmart"]["store_id"], config={})
+    #         s.authenticate()
+    #         return s.scrape_items(items)
+    #     registry["walmart"] = _walmart
 
     # ── Meijer ──────────────────────────────────────────────────────────────
     if "meijer" in stores:
@@ -127,18 +124,22 @@ def _build_registry(stores: dict) -> dict:
         store_ids = stores["fresh_market"].get("store_ids", {})
         for label, meta in store_ids.items():
             key = f"fresh_market_{label}"
-            def _fresh_market(sid=meta["store_id"]):
-                s = FreshMarketScraper(store_id=sid, config={})
-                return s.scrape_circular()
-            registry[key] = _fresh_market
+            def _make_fresh_market(sid):
+                def _fresh_market():
+                    s = FreshMarketScraper(store_id=sid, config={})
+                    return s.scrape_circular()
+                return _fresh_market
+            registry[key] = _make_fresh_market(meta["store_id"])
 
     # ── Costco ──────────────────────────────────────────────────────────────
-    if "costco" in stores:
-        def _costco(items):
-            s = CostcoScraper(store_id=stores["costco"]["store_id"], config={})
-            s.authenticate()
-            return s.scrape_items(items)
-        registry["costco"] = _costco
+    # Disabled: strict bot detection blocks all automated access.
+    # Re-enable when a workaround is available.
+    # if "costco" in stores:
+    #     def _costco(items):
+    #         s = CostcoScraper(store_id=stores["costco"]["store_id"], config={})
+    #         s.authenticate()
+    #         return s.scrape_items(items)
+    #     registry["costco"] = _costco
 
     # ── Needlers ────────────────────────────────────────────────────────────
     if "needlers" in stores:
@@ -161,53 +162,55 @@ def _run_one(
     name: str,
     fn: callable,
     items: list[str],
-    conn,
 ) -> list[dict]:
     """Run one scraper, validate results, persist to DB. Returns saved records.
 
+    Each call creates its own DB connection for thread safety.
     Never raises — exceptions are caught, logged, and recorded in the DB so
     other scrapers in a parallel run continue unaffected.
     """
-    with _write_lock:
-        run_id = start_run(conn, name, "", 0)
-    logger.info(f"[{name}] Starting...")
-
+    conn = get_conn()
     try:
-        sig = inspect.signature(fn)
-        raw = fn(items) if sig.parameters else fn()
-        # scrape_items() returns (results, failed_queries) — unpack if needed
-        if isinstance(raw, tuple):
-            raw = raw[0]
-        raw = raw or []
+        run_id = start_run(conn, name, "", 0)
+        logger.info(f"[{name}] Starting...")
 
-        # Validate — drops hard errors, deduplicates, collects warnings
-        valid, issues = validate_results(raw, name)
-        for issue in issues:
-            logger.warning(issue)
+        try:
+            sig = inspect.signature(fn)
+            raw = fn(items) if sig.parameters else fn()
+            # scrape_items() returns (results, failed_queries) — unpack if needed
+            if isinstance(raw, tuple):
+                raw = raw[0]
+            raw = raw or []
 
-        # Item count drop check (compare against last successful run)
-        last = last_successful_run(conn, name)
-        last_count = last["records_saved"] if last else None
-        drop_warn = check_count_drop(name, len(valid), last_count)
-        if drop_warn:
-            logger.warning(drop_warn)
+            # Validate — drops hard errors, deduplicates, collects warnings
+            valid, issues = validate_results(raw, name)
+            for issue in issues:
+                logger.warning(issue)
 
-        with _write_lock:
+            # Item count drop check (compare against last successful run)
+            last = last_successful_run(conn, name)
+            last_count = last["records_saved"] if last else None
+            drop_warn = check_count_drop(name, len(valid), last_count)
+            if drop_warn:
+                logger.warning(drop_warn)
+
             saved = insert_many(conn, valid)
-            finish_run(conn, run_id, 0, 0, saved, None)
+            # queries_ok=1 represents the single scrape call succeeding
+            finish_run(conn, run_id, 1, 0, saved, None)
 
-        logger.info(
-            f"[{name}] Done — {len(raw)} scraped, "
-            f"{len(valid)} valid ({len(raw) - len(valid)} dropped), "
-            f"{saved} saved to DB."
-        )
-        return valid
+            logger.info(
+                f"[{name}] Done — {len(raw)} scraped, "
+                f"{len(valid)} valid ({len(raw) - len(valid)} dropped), "
+                f"{saved} saved to DB."
+            )
+            return valid
 
-    except Exception as e:
-        logger.error(f"[{name}] Failed: {e}")
-        with _write_lock:
+        except Exception as e:
+            logger.error(f"[{name}] Failed: {e}")
             finish_run(conn, run_id, 0, 0, 0, str(e))
-        return []
+            return []
+    finally:
+        release_conn(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +226,6 @@ def run_retailers(
     names: list[str],
     stores: dict,
     items: list[str],
-    conn,
     workers: int = 1,
 ) -> list[dict]:
     """Run scrapers for the given retailer names and return all collected records.
@@ -233,9 +235,8 @@ def run_retailers(
                  Pass an empty list to run all.
         stores:  The 'stores' dict from config/stores.json.
         items:   Search query list from config/items.json.
-        conn:    SQLite connection from get_conn().
         workers: Number of scrapers to run in parallel (default 1 = serial).
-                 Recommended: 4–5. Costco (Playwright) is safe to parallelize
+                 Recommended: 4-5. Costco (Playwright) is safe to parallelize
                  since each scraper creates its own browser instance.
     """
     registry = _build_registry(stores)
@@ -257,7 +258,7 @@ def run_retailers(
         )
         with ThreadPoolExecutor(max_workers=min(workers, len(to_run))) as executor:
             futures = {
-                executor.submit(_run_one, name, registry[name], items, conn): name
+                executor.submit(_run_one, name, registry[name], items): name
                 for name in to_run
             }
             for future in as_completed(futures):
@@ -269,11 +270,11 @@ def run_retailers(
                     logger.error(f"[{name}] Unhandled exception in worker: {e}")
     else:
         for name in to_run:
-            all_results.extend(_run_one(name, registry[name], items, conn))
+            all_results.extend(_run_one(name, registry[name], items))
 
     return all_results
 
 
-def run_all(stores: dict, items: list[str], conn, workers: int = 1) -> list[dict]:
+def run_all(stores: dict, items: list[str], workers: int = 1) -> list[dict]:
     """Run every registered retailer."""
-    return run_retailers([], stores, items, conn, workers=workers)
+    return run_retailers([], stores, items, workers=workers)

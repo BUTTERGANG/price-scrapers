@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from utils import get_conn, cheapest_per_retailer, find_active_deals, last_successful_run
+from utils import get_conn, release_conn, cheapest_per_retailer, find_active_deals, last_successful_run
 
 
 def cmd_search(conn, item: str) -> None:
@@ -65,15 +65,17 @@ def main():
     args = parser.parse_args()
 
     conn = get_conn()
-
-    if args.runs:
-        cmd_runs(conn)
-    elif args.deals:
-        cmd_deals(conn, args.min_savings)
-    elif args.item:
-        cmd_search(conn, args.item)
-    else:
-        parser.print_help()
+    try:
+        if args.runs:
+            cmd_runs(conn)
+        elif args.deals:
+            cmd_deals(conn, args.min_savings)
+        elif args.item:
+            cmd_search(conn, args.item)
+        else:
+            parser.print_help()
+    finally:
+        release_conn(conn)
 
 
 if __name__ == "__main__":

@@ -30,7 +30,7 @@ outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd frontend && npm run dev"
+args = "cd frontend && npm install && npm run dev"
 waitForPort = 5000
 
 [[workflows.workflow]]
@@ -42,8 +42,30 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python server.py"
+args = "pip install -q psycopg2-binary && python server.py"
 waitForPort = 8000
+
+[[workflows.workflow]]
+name = "Run Scrapers"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py --workers 4"
+
+[[workflows.workflow]]
+name = "Run Single Scraper"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py aldi"
 
 [[ports]]
 localPort = 5000
@@ -52,9 +74,8 @@ externalPort = 80
 [[ports]]
 localPort = 8000
 externalPort = 8000
-exposeLocalhost = true
 
 [deployment]
 deploymentTarget = "vm"
 run = ["bash", "-c", "python server.py"]
-build = ["bash", "-c", "cd frontend && npm install && npm run build"]
+build = ["bash", "-c", "pip install -q psycopg2-binary && cd frontend && npm install && npm run build"]

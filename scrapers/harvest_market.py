@@ -122,6 +122,7 @@ class HarvestMarketScraper(BaseScraper):
         super().__init__(store_id, config)
         self.session = requests.Session()
         self.session.headers.update(_HEADERS)
+        self._circular_url: Optional[str] = None  # set by authenticate()
 
     def authenticate(self) -> None:
         """Set the Webstop store cookie by visiting the choose_store endpoint."""
@@ -136,6 +137,11 @@ class HarvestMarketScraper(BaseScraper):
             allow_redirects=True,
         )
         resp.raise_for_status()
+
+        # Store the circular base URL (e.g. .../circulars/Page/1/Base/2/260318_HM/).
+        # Department pages must be fetched relative to this URL, not the generic
+        # /circulars/department/{dept}/ path, which now returns empty HTML.
+        self._circular_url = resp.url.rstrip("/")
 
         store_num = self.session.cookies.get(f"{RETAILER_ID}_store_number", "")
         logger.info(
@@ -207,7 +213,11 @@ class HarvestMarketScraper(BaseScraper):
         self, dept: str
     ) -> tuple[list[dict], list[dict]]:
         """Fetch and parse one department page. Returns (normalized, raw)."""
-        url = f"{BASE_URL}/circulars/department/{dept}/"
+        if not self._circular_url:
+            raise RuntimeError(
+                "[harvest_market] _circular_url not set — call authenticate() first."
+            )
+        url = f"{self._circular_url}/department/{dept}/"
         resp = self.session.get(url, timeout=20)
         resp.raise_for_status()
 
