@@ -1,0 +1,150 @@
+{
+  "_comment": "Maps category keywords to the standard unit for price comparison. Keywords are matched case-insensitively against product name + department + category fields. Higher priority categories match first.",
+  "categories": [
+    {
+      "keywords": ["milk", "half & half", "half and half", "buttermilk", "kefir"],
+      "standard_unit": "per_gal",
+      "display_name": "per gallon",
+      "canonical_base": "volume_liquid",
+      "priority": 10
+    },
+    {
+      "keywords": ["cream", "heavy cream", "whipping cream", "half & half"],
+      "standard_unit": "per_gal",
+      "display_name": "per gallon",
+      "canonical_base": "volume_liquid",
+      "priority": 10
+    },
+    {
+      "keywords": ["juice", "lemonade", "iced tea", "soda", "seltzer", "water", "sparkling water"],
+      "standard_unit": "per_gal",
+      "display_name": "per gallon",
+      "canonical_base": "volume_liquid",
+      "priority": 10
+    },
+    {
+      "keywords": ["eggs", "egg"],
+      "standard_unit": "per_dozen",
+      "display_name": "per dozen",
+      "canonical_base": "count",
+      "priority": 10
+    },
+    {
+      "keywords": ["cereal", "oatmeal", "granola"],
+      "standard_unit": "per_lb",
+      "display_name": "per pound",
+      "canonical_base": "weight",
+      "priority": 10
+    },
+    {
+      "keywords": ["pasta", "noodles", "spaghetti", "penne", "rigatoni", "fettuccine", "macaroni", "lasagna", "ravioli", "tortellini"],
+      "standard_unit": "per_lb",
+      "display_name": "per pound",
+      "canonical_base": "weight",
+      "priority": 10
+    },
+    {
+      "keywords": ["rice", "quinoa", "couscous", "lentils"],
+      "standard_unit": "per_lb",
+      "display_name": "per pound",
+      "canonical_base": "weight",
+      "priority": 10
+    },
+    {
+      "keywords": ["chicken breast", "ground beef", "steak", "pork chop", "turkey", "sausage", "bacon", "deli meat", "ham", "ground turkey", "chicken thighs", "chicken wings"],
+      "standard_unit": "per_lb",
+      "display_name": "per pound",
+      "canonical_base": "weight",
+      "priority": 10
+    },
+    {
+      "keywords": ["cheese", "cheddar", "mozzarella", "parmesan", "swiss", "gouda", "brie", "provolone", "pepper jack", "colby", "monterey jack"],
+      "standard_unit": "per_lb",
+      "display_name": "per pound",
+      "canonical_base": "weight",
+      "priority": 10
+    },
+    {
+      "keywords": ["yogurt", "yoghurt", "greek yogurt"],
+      "standard_unit": "per_32oz",
+      "display_name": "per 32 oz",
+      "canonical_base": "volume_liquid",
+      "priority": 10
+    },
+    {
+      "keywords": ["butter", "margarine"],
+      "standard_unit": "per_lb",
+      "display_name": "per pound",
+      "canonical_base": "weight",
+      "priority": 10
+    },
+    {
+      "keywords": ["bananas", "banana"],
+      "standard_unit": "per_lb",
+      "display_name": "per pound",
+      "canonical_base": "weight",
+      "priority": 10
+    },
+    {
+      "keywords": ["apples", "oranges", "lemons", "limes", "grapes", "strawberries", "blueberries", "raspberries", "blackberries", "watermelon", "pineapple", "mango", "peaches", "pears", "plums", "cherries", "cantaloupe", "honeydew"],
+      "standard_unit": "per_lb",
+      "display_name": "per pound",
+      "canonical_base": "weight",
+      "priority": 10
+    },
+    {
+      "keywords": ["olive oil", "vegetable oil", "canola oil", "coconut oil", "cooking oil", "avocado oil", "grapeseed oil"],
+      "standard_unit": "per_gal",
+      "display_name": "per gallon",
+      "canonical_base": "volume_liquid",
+      "priority": 10
+    },
+    {
+      "keywords": ["chips", "crackers", "pretzels", "popcorn", "trail mix"],
+      "standard_unit": "per_lb",
+      "display_name": "per pound",
+      "canonical_base": "weight",
+      "priority": 10
+    },
+    {
+      "keywords": ["bread", "bagels", "english muffins", "tortillas", "pita", "hamburger buns", "hot dog buns"],
+      "standard_unit": "per_ct",
+      "display_name": "per item",
+      "canonical_base": "count",
+      "priority": 5
+    },
+    {
+      "keywords": ["coffee"],
+      "standard_unit": "per_lb",
+      "display_name": "per pound",
+      "canonical_base": "weight",
+      "priority": 5
+    },
+    {
+      "keywords": ["beans", "black beans", "pinto beans", "kidney beans", "cannellini beans", "chickpeas", "garbanzo beans"],
+      "standard_unit": "per_lb",
+      "display_name": "per pound",
+      "canonical_base": "weight",
+      "priority": 10
+    },
+    {
+      "keywords": ["flour", "sugar", "brown sugar", "powdered sugar", "baking soda", "baking powder", "cornstarch"],
+      "standard_unit": "per_lb",
+      "display_name": "per pound",
+      "canonical_base": "weight",
+      "priority": 10
+    },
+    {
+      "keywords": ["onions", "potatoes", "sweet potatoes", "carrots", "celery", "broccoli", "cauliflower", "spinach", "lettuce", "kale", "cabbage", "peppers", "tomatoes", "cucumbers", "zucchini", "squash", "garlic", "ginger"],
+      "standard_unit": "per_lb",
+      "display_name": "per pound",
+      "canonical_base": "weight",
+      "priority": 10
+    }
+  ],
+  "fallback": {
+    "standard_unit": "per_ct",
+    "display_name": "per item",
+    "canonical_base": "count"
+  }
+}

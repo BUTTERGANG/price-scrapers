@@ -7,10 +7,11 @@ from pathlib import Path
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 load_dotenv()
 
@@ -43,6 +44,7 @@ from utils import (
     init_db,
     find_active_deals,
     cheapest_per_retailer,
+    cheapest_per_retailer_standard,
     price_history,
     find_by_upc,
     get_store_status,
@@ -58,6 +60,12 @@ from utils import (
     get_data_freshness,
     get_watchlist_prices,
     cleanup_old_prices,
+    get_scraper_stats,
+    add_watchlist_item,
+    remove_watchlist_item,
+    get_watchlist,
+    get_active_alerts,
+    acknowledge_alert,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,6 +79,39 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# Global exception handlers — consistent JSON error responses
+# ---------------------------------------------------------------------------
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Return JSON for all HTTP exceptions (404, 400, etc.)."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": True,
+            "status_code": exc.status_code,
+            "detail": exc.detail,
+            "path": str(request.url.path),
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch-all for unexpected errors — log full traceback, return safe JSON."""
+    logger.exception(f"Unhandled error on {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": True,
+            "status_code": 500,
+            "detail": "Internal server error",
+            "path": str(request.url.path),
+        },
+    )
 
 STORES = _load_config("config/stores.json")
 ITEMS = _load_config("config/items.json")
@@ -163,6 +204,75 @@ def api_status():
         conn = get_conn()
         stats = get_db_stats(conn)
         return {"status": "ok", "db": stats}
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "detail": str(e)},
+        )
+    finally:
+        release_conn(conn)
+
+
+@app.get("/api/health")
+def api_health():
+    """Comprehensive health check — DB, scraper status, and data freshness."""
+    conn = None
+    try:
+        conn = get_conn()
+        stats = get_db_stats(conn)
+        freshness = get_data_freshness(conn)
+        store_status = get_store_status(conn)
+
+        # Determine overall health — use DB-derived retailer names only
+        # (config keys like "kroger" don't match DB names like "kroger_weekly_02100959")
+        configured = set()
+        for f in freshness:
+            configured.add(f.get("retailer", ""))
+        for s in store_status:
+            configured.add(s["retailer"])
+        configured.discard("")
+
+        # Check for stale retailers (no scrape in 24h)
+        stale = []
+        healthy = []
+        never_run = []
+        for f in freshness:
+            retailer = f.get("retailer", "")
+            hours = f.get("hours_ago")
+            if hours is None:
+                never_run.append(retailer)
+            elif hours > 24:
+                stale.append({"retailer": retailer, "hours_ago": hours})
+            else:
+                healthy.append(retailer)
+
+        # Check for recent errors
+        errors = [
+            s for s in store_status
+            if s.get("status") == "error" and s.get("error")
+        ]
+
+        overall = "ok"
+        if stale or errors:
+            overall = "degraded"
+        if not healthy and not stale:
+            overall = "down"
+
+        return {
+            "status": overall,
+            "db": stats,
+            "scrapers": {
+                "total": len(configured),
+                "healthy": len(healthy),
+                "stale": stale,
+                "never_run": never_run,
+                "errors": [
+                    {"retailer": e["retailer"], "error": e["error"]}
+                    for e in errors
+                ],
+            },
+            "freshness": freshness,
+        }
     except Exception as e:
         return JSONResponse(
             status_code=503,
@@ -311,6 +421,25 @@ def compare_prices(q: str = Query(..., min_length=2)):
 
 
 # ---------------------------------------------------------------------------
+# Standard unit comparison (category-aware)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/compare/standard")
+def compare_prices_standard(q: str = Query(..., min_length=2)):
+    """Compare standard unit prices across retailers for a product category.
+
+    Returns results grouped by standard_unit (e.g., all milk compared per
+    gallon, all eggs per dozen) so prices are truly like-for-like.
+    """
+    conn = get_conn()
+    try:
+        result = cheapest_per_retailer_standard(conn, q)
+        return {"query": q, **result}
+    finally:
+        release_conn(conn)
+
+
+# ---------------------------------------------------------------------------
 # UPC lookup
 # ---------------------------------------------------------------------------
 
@@ -405,6 +534,17 @@ def store_analytics(retailer: str):
 # Data freshness
 # ---------------------------------------------------------------------------
 
+@app.get("/api/scraper-stats")
+def scraper_stats(days: int = Query(default=30, ge=1, le=365)):
+    """Per-retailer performance metrics: success rate, avg records, avg duration."""
+    conn = get_conn()
+    try:
+        stats = get_scraper_stats(conn, days=days)
+        return {"stats": stats, "days": days, "count": len(stats)}
+    finally:
+        release_conn(conn)
+
+
 @app.get("/api/freshness")
 def freshness():
     conn = get_conn()
@@ -435,6 +575,84 @@ def watchlist_prices(items: list[dict]):
     try:
         prices = get_watchlist_prices(conn, items)
         return {"prices": prices}
+    finally:
+        release_conn(conn)
+
+
+# ---------------------------------------------------------------------------
+# Watchlist CRUD
+# ---------------------------------------------------------------------------
+
+@app.get("/api/watchlist")
+def watchlist_list():
+    """Return all watchlist items with their latest price."""
+    conn = get_conn()
+    try:
+        items = get_watchlist(conn)
+        return {"items": items, "count": len(items)}
+    finally:
+        release_conn(conn)
+
+
+@app.post("/api/watchlist")
+def watchlist_add(item: dict):
+    """
+    Add a watchlist item.
+    Body: {"retailer": "kroger", "product_id": "abc123", "name": "Milk", "target_price": 2.99}
+    """
+    if not isinstance(item, dict) or "retailer" not in item or "product_id" not in item:
+        raise HTTPException(400, "Each item must have 'retailer' and 'product_id'")
+    conn = get_conn()
+    try:
+        row_id = add_watchlist_item(
+            conn,
+            retailer=item["retailer"],
+            product_id=item["product_id"],
+            name=item.get("name", ""),
+            target_price=item.get("target_price"),
+        )
+        return {"id": row_id, "message": "Added to watchlist"}
+    finally:
+        release_conn(conn)
+
+
+@app.delete("/api/watchlist/{retailer}/{product_id}")
+def watchlist_remove(retailer: str, product_id: str):
+    """Remove a watchlist item."""
+    conn = get_conn()
+    try:
+        removed = remove_watchlist_item(conn, retailer, product_id)
+        if not removed:
+            raise HTTPException(404, f"Watchlist item not found: {retailer}/{product_id}")
+        return {"message": "Removed from watchlist"}
+    finally:
+        release_conn(conn)
+
+
+# ---------------------------------------------------------------------------
+# Price alerts
+# ---------------------------------------------------------------------------
+
+@app.get("/api/alerts")
+def alerts_list(limit: int = Query(default=50, ge=1, le=200)):
+    """Return unacknowledged price alerts."""
+    conn = get_conn()
+    try:
+        alerts = get_active_alerts(conn, limit=limit)
+        return {"alerts": alerts, "count": len(alerts)}
+    finally:
+        release_conn(conn)
+
+
+@app.post("/api/alerts/{alert_id}/acknowledge")
+def alert_acknowledge(alert_id: int):
+    """Acknowledge a price alert."""
+    conn = get_conn()
+    try:
+        updated = acknowledge_alert(conn, alert_id)
+        if not updated:
+            raise HTTPException(404, f"Alert {alert_id} not found")
+        return {"message": "Alert acknowledged"}
     finally:
         release_conn(conn)
 

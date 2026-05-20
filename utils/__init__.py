@@ -11,6 +11,7 @@ from .db import (
     last_successful_run,
     find_active_deals,
     cheapest_per_retailer,
+    cheapest_per_retailer_standard,
     price_history,
     lowest_price_ever,
     find_by_upc,
@@ -28,6 +29,13 @@ from .db import (
     get_data_freshness,
     get_watchlist_prices,
     cleanup_old_prices,
+    add_watchlist_item,
+    remove_watchlist_item,
+    get_watchlist,
+    check_price_alerts,
+    get_active_alerts,
+    acknowledge_alert,
+    get_scraper_stats,
 )
 from .compare import (
     compare_by_name,
@@ -37,7 +45,8 @@ from .compare import (
     best_price_per_retailer,
     print_unit_price_comparison,
 )
-from .unit_price import normalize_unit_price, parse_size, format_unit_price
+from .unit_price import normalize_unit_price, parse_size, format_unit_price, compute_standard_unit_price
+from .category_resolver import resolve_standard_unit
 from .validate import validate_results, check_count_drop
 
 __all__ = [
@@ -57,6 +66,7 @@ __all__ = [
     "last_successful_run",
     "find_active_deals",
     "cheapest_per_retailer",
+    "cheapest_per_retailer_standard",
     "price_history",
     "lowest_price_ever",
     "find_by_upc",
@@ -74,6 +84,14 @@ __all__ = [
     "get_data_freshness",
     "get_watchlist_prices",
     "cleanup_old_prices",
+    # Watchlist & price alerts
+    "add_watchlist_item",
+    "remove_watchlist_item",
+    "get_watchlist",
+    "check_price_alerts",
+    "get_active_alerts",
+    "acknowledge_alert",
+    "get_scraper_stats",
     # In-memory comparison (for reporting on current-run results)
     "compare_by_name",
     "compare_by_unit_price",
@@ -85,6 +103,9 @@ __all__ = [
     "normalize_unit_price",
     "parse_size",
     "format_unit_price",
+    # Category-aware standard pricing
+    "compute_standard_unit_price",
+    "resolve_standard_unit",
     # Data quality validation
     "validate_results",
     "check_count_drop",
