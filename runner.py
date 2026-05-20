@@ -4,7 +4,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
-from utils import finish_run, insert_many, last_successful_run, start_run, get_conn, release_conn
+from utils import finish_run, insert_many, last_successful_run, start_run, get_conn, release_conn, check_price_alerts
 from utils.validate import check_count_drop, validate_results
 
 logger = logging.getLogger(__name__)
@@ -195,6 +195,29 @@ def _run_one(
                 logger.warning(drop_warn)
 
             saved = insert_many(conn, valid)
+
+            # Check watchlist alerts for any price drops
+            alerts_triggered = 0
+            for rec in valid:
+                effective_price = rec.get("sale_price") or rec.get("price")
+                if effective_price is None:
+                    continue
+                alert = check_price_alerts(
+                    conn,
+                    retailer=rec["retailer"],
+                    product_id=rec["product_id"],
+                    new_price=effective_price,
+                    name=rec.get("name", ""),
+                )
+                if alert:
+                    alerts_triggered += 1
+                    logger.info(
+                        f"[{name}] Price alert triggered: {rec.get('name')} "
+                        f"at ${effective_price} (target: ${alert['target_price']})"
+                    )
+            if alerts_triggered:
+                logger.info(f"[{name}] {alerts_triggered} price alert(s) triggered.")
+
             # queries_ok=1 represents the single scrape call succeeding
             finish_run(conn, run_id, 1, 0, saved, None)
 

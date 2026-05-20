@@ -1,9 +1,41 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Component } from 'react';
 import {
   AreaChart, Area, LineChart, Line, BarChart, Bar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import './index.css';
+
+// ---------------------------------------------------------------------------
+// Error Boundary — prevents a single view crash from taking down the whole app
+// ---------------------------------------------------------------------------
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, info) {
+    console.error('ErrorBoundary caught:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-boundary">
+          <span className="error-boundary-icon">⚠️</span>
+          <h3>Something went wrong</h3>
+          <p className="error-boundary-detail">{this.state.error?.message || 'Unknown error'}</p>
+          <button onClick={() => this.setState({ hasError: false, error: null })}>
+            Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const API_BASE = '/api';
 
@@ -29,12 +61,15 @@ function useFetch(url, refreshIntervalMs = 0) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastFetched, setLastFetched] = useState(null);
+  const urlRef = useRef(url);
+  urlRef.current = url;
   const fetchData = useCallback(async () => {
-    if (!url) return;
+    const currentUrl = urlRef.current;
+    if (!currentUrl) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(url);
+      const res = await fetch(currentUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setData(await res.json());
       setLastFetched(new Date());
@@ -43,8 +78,8 @@ function useFetch(url, refreshIntervalMs = 0) {
     } finally {
       setLoading(false);
     }
-  }, [url]);
-  useEffect(() => { fetchData(); }, [fetchData]);
+  }, []);
+  useEffect(() => { fetchData(); }, [url, fetchData]);
   useEffect(() => {
     if (!refreshIntervalMs) return;
     const id = setInterval(fetchData, refreshIntervalMs);
@@ -581,17 +616,27 @@ function SearchView({ watchlist, toggleWatchlist }) {
   const [error, setError] = useState(null);
   const [searched, setSearched] = useState(false);
   const debounceRef = useRef(null);
+  const abortRef = useRef(null);
 
   const doSearch = async (e) => {
     if (e) e.preventDefault();
     if (!query.trim()) return;
+    // Cancel any in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true); setError(null); setSearched(true);
     try {
-      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`, {
+        signal: controller.signal,
+      });
       if (!res.ok) throw new Error('Failed to fetch');
       setResults((await res.json()).results || []);
-    } catch (err) { setError(err.message); }
-    finally { setLoading(false); }
+    } catch (err) {
+      if (err.name !== 'AbortError') setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const watchedIds = new Set(watchlist.map(w => `${w.retailer}::${w.product_id}`));
@@ -607,15 +652,21 @@ function SearchView({ watchlist, toggleWatchlist }) {
             const val = e.target.value;
             setQuery(val);
             if (debounceRef.current) clearTimeout(debounceRef.current);
+            // Cancel any in-flight request before starting a new one
+            if (abortRef.current) abortRef.current.abort();
             if (val.trim().length >= 2) {
+              const controller = new AbortController();
+              abortRef.current = controller;
               debounceRef.current = setTimeout(() => {
                 setSearched(true);
                 setLoading(true);
                 setError(null);
-                fetch(`${API_BASE}/search?q=${encodeURIComponent(val.trim())}`)
+                fetch(`${API_BASE}/search?q=${encodeURIComponent(val.trim())}`, {
+                  signal: controller.signal,
+                })
                   .then(r => { if (!r.ok) throw new Error('Failed to fetch'); return r.json(); })
                   .then(d => setResults(d.results || []))
-                  .catch(err => setError(err.message))
+                  .catch(err => { if (err.name !== 'AbortError') setError(err.message); })
                   .finally(() => setLoading(false));
               }, 400);
             } else if (val.trim().length === 0) {
@@ -720,19 +771,30 @@ function CompareView() {
     setBasketResults(null);
   };
 
+  // Run promises in batches of `limit` concurrent requests to avoid
+  // overwhelming the backend or hitting browser connection limits.
+  const runBatched = async (items, fn, limit = 5) => {
+    const results = [];
+    for (let i = 0; i < items.length; i += limit) {
+      const batch = items.slice(i, i + limit);
+      const batchResults = await Promise.all(batch.map(fn));
+      results.push(...batchResults);
+    }
+    return results;
+  };
+
   const compareBasket = async () => {
     if (basket.length === 0) return;
     setBasketLoading(true);
     setBasketError(null);
     setBasketResults(null);
     try {
-      const fetches = basket.map(item =>
+      const allResults = await runBatched(basket, item =>
         fetch(`${API_BASE}/compare?q=${encodeURIComponent(item)}`)
           .then(r => r.ok ? r.json() : null)
           .then(d => ({ item, data: d?.comparison || [] }))
           .catch(() => ({ item, data: [] }))
-      );
-      const allResults = await Promise.all(fetches);
+      , 5);
 
       const itemPrices = {};
       const allRetailers = new Set();
@@ -1763,14 +1825,16 @@ function App() {
       )}
 
       <main>
-        {tab === 'dashboard' && <DashboardView onNavigate={setTab} />}
-        {tab === 'deals' && <DealsView watchlist={watchlist} toggleWatchlist={toggleWatchlist} />}
-        {tab === 'search' && <SearchView watchlist={watchlist} toggleWatchlist={toggleWatchlist} />}
-        {tab === 'compare' && <CompareView />}
-        {tab === 'history' && <HistoryView />}
-        {tab === 'departments' && <DepartmentsView />}
-        {tab === 'watchlist' && <WatchlistView watchlist={watchlist} toggleWatchlist={toggleWatchlist} priceAlerts={priceAlerts} setPriceAlerts={setPriceAlerts} />}
-        {tab === 'stores' && <StoresView />}
+        <ErrorBoundary>
+          {tab === 'dashboard' && <DashboardView onNavigate={setTab} />}
+          {tab === 'deals' && <DealsView watchlist={watchlist} toggleWatchlist={toggleWatchlist} />}
+          {tab === 'search' && <SearchView watchlist={watchlist} toggleWatchlist={toggleWatchlist} />}
+          {tab === 'compare' && <CompareView />}
+          {tab === 'history' && <HistoryView />}
+          {tab === 'departments' && <DepartmentsView />}
+          {tab === 'watchlist' && <WatchlistView watchlist={watchlist} toggleWatchlist={toggleWatchlist} priceAlerts={priceAlerts} setPriceAlerts={setPriceAlerts} />}
+          {tab === 'stores' && <StoresView />}
+        </ErrorBoundary>
       </main>
     </>
   );

@@ -125,22 +125,49 @@ class KrogerScraper(BaseScraper):
         return location_id[:3], location_id[3:]
 
     @staticmethod
-    def _extract_price(pricing_text: str) -> tuple[float, Optional[str]]:
-        if not pricing_text:
-            return 0.0, None
-        match = re.search(r"\$([0-9]+(?:\.[0-9]{1,2})?)", pricing_text)
-        if match:
-            price = float(match.group(1))
-        elif "¢" in pricing_text:
-            cents_match = re.search(r"([0-9]{1,3})\s*¢", pricing_text)
-            if not cents_match:
-                return 0.0, None
-            price = float(cents_match.group(1)) / 100
-        else:
-            return 0.0, None
-        unit_match = re.search(r"\b(LB|EA|CT|PK|GAL|OZ)\b", pricing_text, re.IGNORECASE)
-        unit = unit_match.group(1).upper() if unit_match else None
-        return price, unit
+    def _extract_price(pricing_text: str, pricing_html: str = "") -> tuple[float, Optional[str]]:
+        """Extract price from pricingText, falling back to pricingHTML.
+
+        Kroger's API sometimes returns empty or non-numeric pricingText (e.g.
+        "See price in store") while pricingHTML contains the actual price in
+        a data attribute or inner text. This method tries pricingText first,
+        then falls back to parsing pricingHTML.
+        """
+        text = (pricing_text or "").strip()
+        html = (pricing_html or "").strip()
+
+        # Try pricingText first
+        if text:
+            match = re.search(r"\$([0-9]+(?:\.[0-9]{1,2})?)", text)
+            if match:
+                price = float(match.group(1))
+                unit_match = re.search(r"\b(LB|EA|CT|PK|GAL|OZ)\b", text, re.IGNORECASE)
+                return price, unit_match.group(1).upper() if unit_match else None
+            if "¢" in text:
+                cents_match = re.search(r"([0-9]{1,3})\s*¢", text)
+                if cents_match:
+                    return float(cents_match.group(1)) / 100, None
+
+        # Fallback: parse pricingHTML
+        if html:
+            # Try data-price attribute first (e.g. data-price="3.99")
+            data_price = re.search(r'data-price="([0-9]+(?:\.[0-9]{1,2})?)"', html, re.IGNORECASE)
+            if data_price:
+                price = float(data_price.group(1))
+                unit_match = re.search(r"\b(LB|EA|CT|PK|GAL|OZ)\b", html, re.IGNORECASE)
+                return price, unit_match.group(1).upper() if unit_match else None
+            # Try dollar amount in inner text / between tags
+            inner_price = re.search(r">\$([0-9]+(?:\.[0-9]{1,2})?)<", html)
+            if inner_price:
+                price = float(inner_price.group(1))
+                unit_match = re.search(r"\b(LB|EA|CT|PK|GAL|OZ)\b", html, re.IGNORECASE)
+                return price, unit_match.group(1).upper() if unit_match else None
+            # Try cents in HTML
+            cents_html = re.search(r">([0-9]{1,3})\s*¢<", html)
+            if cents_html:
+                return float(cents_html.group(1)) / 100, None
+
+        return 0.0, None
 
     @staticmethod
     def _parse_store_list(stores_raw: str) -> set[str]:
@@ -227,7 +254,10 @@ class KrogerScraper(BaseScraper):
             offer = self._fetch_offer(ad_id, offer_id, location_id)
             if idx < 3:
                 self.save_raw(offer, f"weeklyad_offer_{location_id}_{offer_id}")
-            price, unit = self._extract_price(offer.get("pricingText", ""))
+            price, unit = self._extract_price(
+                offer.get("pricingText", ""),
+                offer.get("pricingHTML", ""),
+            )
             name = offer.get("headline") or meta.get("headline") or meta.get("body_copy") or ""
             results.append(
                 self.normalize_price(
