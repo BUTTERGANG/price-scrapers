@@ -15,7 +15,7 @@ import json
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import psycopg2
@@ -70,9 +70,13 @@ def get_conn():
     pool = _get_pool()
     conn = pool.getconn()
     conn.autocommit = False
-    # Prevent runaway queries from blocking indefinitely (30 second limit).
     with conn.cursor() as cur:
+        # Prevent runaway queries from blocking indefinitely (30 second limit).
         cur.execute("SET statement_timeout = '30s'")
+        # Neon's pooler runs in transaction mode, where session-level SETs from
+        # other clients (e.g. test fixtures) can leak into reused server
+        # sessions — pin the search_path so we never inherit one.
+        cur.execute("SET search_path TO public")
     conn.commit()
     return conn
 
@@ -113,7 +117,7 @@ def _ensure_schema(conn) -> None:
                 unit_canonical        TEXT,
                 url                   TEXT,
                 extra_json            TEXT,
-                scraped_at            TEXT    NOT NULL
+                scraped_at            TIMESTAMPTZ NOT NULL
             );
 
             CREATE INDEX IF NOT EXISTS idx_prices_upc
@@ -153,8 +157,8 @@ def _ensure_schema(conn) -> None:
                 queries_failed  INTEGER NOT NULL DEFAULT 0,
                 records_saved   INTEGER NOT NULL DEFAULT 0,
                 error           TEXT,
-                started_at      TEXT    NOT NULL,
-                finished_at     TEXT
+                started_at      TIMESTAMPTZ NOT NULL,
+                finished_at     TIMESTAMPTZ
             );
 
             -- Individual query failures within a run, for targeted reruns.
@@ -165,14 +169,58 @@ def _ensure_schema(conn) -> None:
                 query       TEXT    NOT NULL,
                 error_type  TEXT,
                 error_msg   TEXT,
-                failed_at   TEXT    NOT NULL
+                failed_at   TIMESTAMPTZ NOT NULL
             );
 
             CREATE INDEX IF NOT EXISTS idx_failed_queries_retailer_at
                 ON failed_queries (retailer, failed_at DESC);
             """
         )
+        _migrate_text_timestamps(cur)
     conn.commit()
+
+    # Trigram index speeds up the ILIKE / word-boundary-regex name searches.
+    # Separate transaction: CREATE EXTENSION may be denied on some hosts and
+    # must not roll back the schema setup above.
+    try:
+        with conn.cursor() as cur:
+            cur.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_prices_name_trgm
+                    ON prices USING gin (LOWER(name) gin_trgm_ops)
+                """
+            )
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        logger.warning(f"pg_trgm index unavailable (searches fall back to seq scan): {exc}")
+
+
+def _migrate_text_timestamps(cur) -> None:
+    """One-time migration: convert legacy TEXT timestamp columns (ISO-8601
+    strings from the SQLite era) to native TIMESTAMPTZ."""
+    for table, column in (
+        ("prices", "scraped_at"),
+        ("runs", "started_at"),
+        ("runs", "finished_at"),
+        ("failed_queries", "failed_at"),
+    ):
+        cur.execute(
+            """
+            SELECT data_type FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = %s AND column_name = %s
+            """,
+            (table, column),
+        )
+        row = cur.fetchone()
+        if row and row["data_type"] == "text":
+            logger.info(f"Migrating {table}.{column} TEXT -> TIMESTAMPTZ")
+            cur.execute(
+                f"ALTER TABLE {table} ALTER COLUMN {column} TYPE TIMESTAMPTZ "
+                f"USING NULLIF({column}, '')::timestamptz"
+            )
 
 
 def insert_price(conn, record: dict) -> int:
@@ -215,7 +263,7 @@ def insert_price(conn, record: dict) -> int:
                 "unit_canonical":       record.get("unit_canonical"),
                 "url":                  record.get("url"),
                 "extra_json":           json.dumps(extra) if extra else None,
-                "scraped_at":           record.get("scraped_at", datetime.now().isoformat()),
+                "scraped_at":           record.get("scraped_at") or datetime.now(timezone.utc),
             },
         )
         row = cur.fetchone()
@@ -262,7 +310,7 @@ def _insert_price_row(cur, record: dict) -> bool:
             "unit_canonical":       record.get("unit_canonical"),
             "url":                  record.get("url"),
             "extra_json":           json.dumps(extra) if extra else None,
-            "scraped_at":           record.get("scraped_at", datetime.now().isoformat()),
+            "scraped_at":           record.get("scraped_at") or datetime.now(timezone.utc),
         },
     )
     return cur.rowcount > 0
@@ -298,7 +346,7 @@ def start_run(conn, retailer: str, store_id: str, queries_total: int) -> int:
             VALUES (%s, %s, 'running', %s, %s)
             RETURNING id
             """,
-            (retailer, store_id, queries_total, datetime.now().isoformat()),
+            (retailer, store_id, queries_total, datetime.now(timezone.utc)),
         )
         run_id = cur.fetchone()["id"]
     conn.commit()
@@ -334,7 +382,7 @@ def finish_run(
             WHERE id = %s
             """,
             (status, queries_ok, queries_failed, records_saved,
-             error, datetime.now().isoformat(), run_id),
+             error, datetime.now(timezone.utc), run_id),
         )
     conn.commit()
 
@@ -360,7 +408,7 @@ def log_failed_query(
                 query,
                 type(exc).__name__,
                 str(exc),
-                datetime.now().isoformat(),
+                datetime.now(timezone.utc),
             ),
         )
     conn.commit()
@@ -475,11 +523,9 @@ def find_active_deals(
                 SELECT p.retailer, p.product_id, MAX(p.scraped_at) AS latest
                 FROM prices p
                 JOIN retailer_latest rl ON p.retailer = rl.retailer
-                WHERE p.scraped_at >= (
-                    rl.latest_run::timestamp - interval '30 minutes'
-                )::text
+                WHERE p.scraped_at >= rl.latest_run - interval '30 minutes'
                   -- Exclude retailers whose most recent batch is older than max_age_days
-                  AND rl.latest_run::timestamp >= NOW() - (%s || ' days')::interval
+                  AND rl.latest_run >= NOW() - (%s || ' days')::interval
                 GROUP BY p.retailer, p.product_id
             ),
 
@@ -842,16 +888,15 @@ def get_market_pulse(conn, limit: int = 10) -> dict:
 
 def get_scrape_activity(conn, days: int = 14) -> list:
     """Daily record counts from runs table for activity chart."""
-    from datetime import timedelta
     cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     with conn.cursor() as cur:
         cur.execute("""
-            SELECT LEFT(started_at, 10) AS day,
+            SELECT TO_CHAR(started_at, 'YYYY-MM-DD') AS day,
                    COUNT(*) AS runs,
                    SUM(records_saved) AS records
             FROM runs
-            WHERE LEFT(started_at, 10) >= %s
-            GROUP BY LEFT(started_at, 10)
+            WHERE started_at >= %s::date
+            GROUP BY TO_CHAR(started_at, 'YYYY-MM-DD')
             ORDER BY day
         """, (cutoff,))
         rows = cur.fetchall()
@@ -1010,7 +1055,7 @@ def get_data_freshness(conn) -> list:
             SELECT retailer,
                    MAX(scraped_at) AS latest_scrape,
                    COUNT(*) AS record_count,
-                   ROUND(EXTRACT(EPOCH FROM (NOW() - MAX(scraped_at)::timestamp)) / 3600, 1) AS hours_ago
+                   ROUND(EXTRACT(EPOCH FROM (NOW() - MAX(scraped_at))) / 3600, 1) AS hours_ago
             FROM prices
             GROUP BY retailer
             ORDER BY latest_scrape DESC
@@ -1059,12 +1104,11 @@ def cleanup_old_prices(conn, days_to_keep: int = 90) -> dict:
 
     Returns a dict with deleted count and kept count.
     """
-    cutoff = datetime.now() - __import__("datetime").timedelta(days=days_to_keep)
-    cutoff_str = cutoff.isoformat()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
 
     with conn.cursor() as cur:
         # Count before
-        cur.execute("SELECT COUNT(*) AS cnt FROM prices WHERE scraped_at < %s", (cutoff_str,))
+        cur.execute("SELECT COUNT(*) AS cnt FROM prices WHERE scraped_at < %s", (cutoff,))
         old_count = cur.fetchone()["cnt"]
 
         if old_count == 0:
@@ -1076,16 +1120,16 @@ def cleanup_old_prices(conn, days_to_keep: int = 90) -> dict:
             DELETE FROM prices
             WHERE scraped_at < %s
               AND id NOT IN (
-                  SELECT DISTINCT ON (retailer, product_id, DATE_TRUNC('month', scraped_at::timestamp))
+                  SELECT DISTINCT ON (retailer, product_id, DATE_TRUNC('month', scraped_at))
                       id
                   FROM prices
                   WHERE scraped_at < %s
                   ORDER BY retailer, product_id,
-                           DATE_TRUNC('month', scraped_at::timestamp),
+                           DATE_TRUNC('month', scraped_at),
                            scraped_at ASC
               )
             """,
-            (cutoff_str, cutoff_str),
+            (cutoff, cutoff),
         )
         deleted = cur.rowcount
     conn.commit()

@@ -10,3 +10,4 @@ psycopg2-binary>=2.9.9     # PostgreSQL (NeonDB) driver
 fastapi>=0.110.0           # Web API backend
 uvicorn>=0.29.0            # Web API server
 apscheduler>=3.10.0        # Periodic scraper scheduling
+pytest>=8.0.0              # Test suite (tests/)

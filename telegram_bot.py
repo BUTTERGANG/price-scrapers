@@ -91,27 +91,29 @@ def _unit_price_rows(item: str) -> list[dict]:
     from utils import get_conn, release_conn
     conn = get_conn()
     try:
-        rows = conn.execute(
-            """
-            SELECT p.*
-            FROM prices p
-            INNER JOIN (
-                SELECT retailer, product_id, MAX(scraped_at) AS latest
-                FROM prices
-                WHERE LOWER(name) LIKE ?
-                GROUP BY retailer, product_id
-            ) latest_only
-                ON p.retailer = latest_only.retailer
-               AND p.product_id = latest_only.product_id
-               AND p.scraped_at = latest_only.latest
-            WHERE LOWER(p.name) LIKE ?
-              AND p.unit_price_normalized IS NOT NULL
-              AND p.scraped_at >= datetime('now', '-7 days')
-            ORDER BY p.unit_canonical, p.unit_price_normalized
-            LIMIT 30
-            """,
-            (f"%{item.lower()}%", f"%{item.lower()}%"),
-        ).fetchall()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT p.*
+                FROM prices p
+                INNER JOIN (
+                    SELECT retailer, product_id, MAX(scraped_at) AS latest
+                    FROM prices
+                    WHERE LOWER(name) LIKE %s
+                    GROUP BY retailer, product_id
+                ) latest_only
+                    ON p.retailer = latest_only.retailer
+                   AND p.product_id = latest_only.product_id
+                   AND p.scraped_at = latest_only.latest
+                WHERE LOWER(p.name) LIKE %s
+                  AND p.unit_price_normalized IS NOT NULL
+                  AND p.scraped_at >= NOW() - interval '7 days'
+                ORDER BY p.unit_canonical, p.unit_price_normalized
+                LIMIT 30
+                """,
+                (f"%{item.lower()}%", f"%{item.lower()}%"),
+            )
+            rows = cur.fetchall()
         return [dict(r) for r in rows]
     finally:
         release_conn(conn)
@@ -130,33 +132,35 @@ def _weekly_specials(category_hint: Optional[str] = None) -> list[dict]:
         params: list = []
         category_filter = ""
         if category_hint:
-            category_filter = "AND LOWER(p.name) LIKE ?"
+            category_filter = "AND LOWER(p.name) LIKE %s"
             params.append(f"%{category_hint.lower()}%")
 
-        rows = conn.execute(
-            f"""
-            SELECT p.name, p.retailer, p.price, p.sale_price,
-                   p.unit, p.unit_price_normalized, p.unit_canonical, p.extra_json
-            FROM prices p
-            INNER JOIN (
-                SELECT retailer, product_id, MAX(scraped_at) AS latest
-                FROM prices
-                WHERE scraped_at >= datetime('now', '-7 days')
-                GROUP BY retailer, product_id
-            ) latest_only
-                ON p.retailer = latest_only.retailer
-               AND p.product_id = latest_only.product_id
-               AND p.scraped_at = latest_only.latest
-            WHERE p.scraped_at >= datetime('now', '-7 days')
-              AND COALESCE(p.sale_price, p.price, 0) > 0
-              {category_filter}
-            ORDER BY
-                CASE WHEN p.sale_price IS NOT NULL THEN 0 ELSE 1 END,
-                COALESCE(p.sale_price, p.price) ASC
-            LIMIT 80
-            """,
-            params,
-        ).fetchall()
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT p.name, p.retailer, p.price, p.sale_price,
+                       p.unit, p.unit_price_normalized, p.unit_canonical, p.extra_json
+                FROM prices p
+                INNER JOIN (
+                    SELECT retailer, product_id, MAX(scraped_at) AS latest
+                    FROM prices
+                    WHERE scraped_at >= NOW() - interval '7 days'
+                    GROUP BY retailer, product_id
+                ) latest_only
+                    ON p.retailer = latest_only.retailer
+                   AND p.product_id = latest_only.product_id
+                   AND p.scraped_at = latest_only.latest
+                WHERE p.scraped_at >= NOW() - interval '7 days'
+                  AND COALESCE(p.sale_price, p.price, 0) > 0
+                  {category_filter}
+                ORDER BY
+                    CASE WHEN p.sale_price IS NOT NULL THEN 0 ELSE 1 END,
+                    COALESCE(p.sale_price, p.price) ASC
+                LIMIT 80
+                """,
+                params,
+            )
+            rows = cur.fetchall()
 
         results = []
         for row in rows:
@@ -254,8 +258,8 @@ def _fmt_stores(run_times: dict[str, Optional[str]], active: set[str]) -> str:
         if retailer in active:
             status = " ⏳ _scraping now_"
         elif ts:
-            # Show just the date portion (first 10 chars of ISO timestamp)
-            status = f" _\\(last: {ts[:10]}\\)_"
+            # ts is a datetime (TIMESTAMPTZ column); show just the date portion
+            status = f" _\\(last: {str(ts)[:10]}\\)_"
         else:
             status = " _\\(never run\\)_"
         lines.append(f"  • `{retailer}`{status}")

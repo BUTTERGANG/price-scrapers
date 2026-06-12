@@ -3,6 +3,8 @@ import json
 import logging
 import os
 import threading
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import uvicorn
@@ -62,21 +64,8 @@ from utils import (
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Grocery Price Scrapers API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 STORES = _load_config("config/stores.json")
 ITEMS = _load_config("config/items.json")
-
-# Initialize DB schema once at startup
-init_db()
 
 # Scrape concurrency guard — prevents multiple simultaneous scrape runs
 _scrape_lock = threading.Lock()
@@ -122,33 +111,61 @@ def _scheduled_cleanup():
         release_conn(conn)
 
 
-try:
-    from apscheduler.schedulers.background import BackgroundScheduler
-    import atexit
+def _start_scheduler():
+    """Start the background scheduler. Returns the scheduler or None on failure."""
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
 
-    _scheduler = BackgroundScheduler(timezone="UTC")
-    # Scrape every 6 hours, first run 5 minutes after startup
-    _scheduler.add_job(
-        _scheduled_scrape,
-        "interval",
-        hours=6,
-        id="auto_scrape",
-        replace_existing=True,
-    )
-    # Clean up old data daily at 03:00 UTC
-    _scheduler.add_job(
-        _scheduled_cleanup,
-        "cron",
-        hour=3,
-        minute=0,
-        id="daily_cleanup",
-        replace_existing=True,
-    )
-    _scheduler.start()
-    atexit.register(lambda: _scheduler.shutdown(wait=False))
-    logger.info("Background scheduler started (scrape every 6h, cleanup daily at 03:00 UTC).")
-except Exception as _sched_err:
-    logger.warning(f"Could not start background scheduler: {_sched_err}")
+        scheduler = BackgroundScheduler(timezone="UTC")
+        # Scrape every 6 hours, first run 5 minutes after startup
+        scheduler.add_job(
+            _scheduled_scrape,
+            "interval",
+            hours=6,
+            next_run_time=datetime.now(timezone.utc) + timedelta(minutes=5),
+            id="auto_scrape",
+            replace_existing=True,
+        )
+        # Clean up old data daily at 03:00 UTC
+        scheduler.add_job(
+            _scheduled_cleanup,
+            "cron",
+            hour=3,
+            minute=0,
+            id="daily_cleanup",
+            replace_existing=True,
+        )
+        scheduler.start()
+        logger.info("Background scheduler started (scrape every 6h, cleanup daily at 03:00 UTC).")
+        return scheduler
+    except Exception as exc:
+        logger.warning(f"Could not start background scheduler: {exc}")
+        return None
+
+
+# ---------------------------------------------------------------------------
+# App setup — lifespan runs only in the serving process, so the scheduler is
+# never duplicated by uvicorn's reload supervisor.
+# ---------------------------------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    scheduler = _start_scheduler()
+    yield
+    if scheduler:
+        scheduler.shutdown(wait=False)
+
+
+app = FastAPI(title="Grocery Price Scrapers API", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # ---------------------------------------------------------------------------
@@ -527,9 +544,10 @@ if os.path.exists("frontend/dist"):
 
 
 if __name__ == "__main__":
+    # Hot reload only during development — deployments run a single process.
     uvicorn.run(
         "server:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=not os.environ.get("REPLIT_DEPLOYMENT"),
     )
