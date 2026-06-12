@@ -15,6 +15,12 @@ from utils.db import (
 )
 
 
+def _fetch_one(conn, sql, params=()):
+    with conn.cursor() as cur:
+        cur.execute(sql, params)
+        return cur.fetchone()
+
+
 class TestInsert:
     def test_insert_price_returns_row_id(self, db_conn, sample_price):
         row_id = insert_price(db_conn, sample_price)
@@ -26,13 +32,15 @@ class TestInsert:
         assert count == 2
 
     def test_insert_extra_fields_serialized(self, db_conn, sample_price):
+        # brand is a real column; unknown fields like snap_eligible go to extra_json
         record = {**sample_price, "brand": "Kroger", "snap_eligible": True}
         insert_price(db_conn, record)
-        row = db_conn.execute("SELECT extra_json FROM prices LIMIT 1").fetchone()
+        row = _fetch_one(db_conn, "SELECT brand, extra_json FROM prices LIMIT 1")
         import json
+        assert row["brand"] == "Kroger"
         extra = json.loads(row["extra_json"])
-        assert extra.get("brand") == "Kroger"
         assert extra.get("snap_eligible") is True
+        assert extra.get("category") == "Dairy"
 
 
 class TestPriceHistory:
@@ -93,7 +101,7 @@ class TestRunLogging:
         assert run_id > 0
 
         finish_run(db_conn, run_id, queries_ok=14, queries_failed=1, records_saved=210)
-        row = db_conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+        row = _fetch_one(db_conn, "SELECT * FROM runs WHERE id=%s", (run_id,))
         assert row["status"] == "partial"
         assert row["queries_ok"] == 14
         assert row["records_saved"] == 210
@@ -102,13 +110,13 @@ class TestRunLogging:
     def test_finish_run_success(self, db_conn):
         run_id = start_run(db_conn, "kroger", "01400441", queries_total=15)
         finish_run(db_conn, run_id, queries_ok=15, queries_failed=0, records_saved=300)
-        row = db_conn.execute("SELECT status FROM runs WHERE id=?", (run_id,)).fetchone()
+        row = _fetch_one(db_conn, "SELECT status FROM runs WHERE id=%s", (run_id,))
         assert row["status"] == "success"
 
     def test_finish_run_failed(self, db_conn):
         run_id = start_run(db_conn, "walmart", "2787", queries_total=15)
         finish_run(db_conn, run_id, queries_ok=0, queries_failed=0, records_saved=0, error="403 Forbidden")
-        row = db_conn.execute("SELECT status, error FROM runs WHERE id=?", (run_id,)).fetchone()
+        row = _fetch_one(db_conn, "SELECT status, error FROM runs WHERE id=%s", (run_id,))
         assert row["status"] == "failed"
         assert "403" in row["error"]
 
