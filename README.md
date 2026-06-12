@@ -63,13 +63,16 @@ PRICE_SCRAPERS/
 │   └── compare.py            # In-memory price comparison helpers (current run)
 ├── scripts/
 │   ├── find_stores.py        # Find Kroger/Meijer store IDs near a ZIP
-│   └── query_prices.py       # Query the SQLite price database from the CLI
+│   └── query_prices.py       # Query the PostgreSQL price database from the CLI
 ├── config/
 │   ├── stores.json           # Store IDs and addresses
 │   └── items.json            # Search queries (grocery items to track)
 ├── frontend/
 │   ├── src/
-│   │   ├── App.jsx           # React dashboard (Deals, Search, Compare, History, Stores)
+│   │   ├── App.jsx           # App shell — tabs, navigation, watchlist state
+│   │   ├── components/       # One file per view (Dashboard, Deals, Search, Compare,
+│   │   │                     #   History, Departments, Watchlist, Stores) + Shared.jsx
+│   │   ├── lib/              # hooks.js (useFetch, useLocalStorage), utils.js (formatters)
 │   │   └── index.css         # Dashboard styling
 │   └── vite.config.js        # Vite dev server (port 5000, proxies /api → port 8000)
 ├── data/
