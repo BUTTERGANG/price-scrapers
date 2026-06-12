@@ -9,17 +9,27 @@ export default function SearchView({ watchlist, toggleWatchlist }) {
   const [error, setError] = useState(null);
   const [searched, setSearched] = useState(false);
   const debounceRef = useRef(null);
+  const abortRef = useRef(null);
 
   const doSearch = async (e) => {
     if (e) e.preventDefault();
     if (!query.trim()) return;
+    // Cancel any in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true); setError(null); setSearched(true);
     try {
-      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`, {
+        signal: controller.signal,
+      });
       if (!res.ok) throw new Error('Failed to fetch');
       setResults((await res.json()).results || []);
-    } catch (err) { setError(err.message); }
-    finally { setLoading(false); }
+    } catch (err) {
+      if (err.name !== 'AbortError') setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const watchedIds = new Set(watchlist.map(w => `${w.retailer}::${w.product_id}`));
@@ -35,15 +45,21 @@ export default function SearchView({ watchlist, toggleWatchlist }) {
             const val = e.target.value;
             setQuery(val);
             if (debounceRef.current) clearTimeout(debounceRef.current);
+            // Cancel any in-flight request before starting a new one
+            if (abortRef.current) abortRef.current.abort();
             if (val.trim().length >= 2) {
+              const controller = new AbortController();
+              abortRef.current = controller;
               debounceRef.current = setTimeout(() => {
                 setSearched(true);
                 setLoading(true);
                 setError(null);
-                fetch(`${API_BASE}/search?q=${encodeURIComponent(val.trim())}`)
+                fetch(`${API_BASE}/search?q=${encodeURIComponent(val.trim())}`, {
+                  signal: controller.signal,
+                })
                   .then(r => { if (!r.ok) throw new Error('Failed to fetch'); return r.json(); })
                   .then(d => setResults(d.results || []))
-                  .catch(err => setError(err.message))
+                  .catch(err => { if (err.name !== 'AbortError') setError(err.message); })
                   .finally(() => setLoading(false));
               }, 400);
             } else if (val.trim().length === 0) {

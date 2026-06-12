@@ -140,7 +140,11 @@ class WholeFoodsScraper(BaseScraper):
     def search_products(self, query: str) -> list[dict]:
         """Search current week's sales flyer by product name."""
         query_lower = query.lower()
-        results = self.scrape_circular()
+        try:
+            results = self.scrape_circular()
+        except Exception as exc:
+            logger.error(f"[whole_foods] search_products failed for '{query}': {exc}")
+            return []
         return [
             r for r in results
             if query_lower in r["name"].lower()
@@ -149,7 +153,11 @@ class WholeFoodsScraper(BaseScraper):
 
     def get_product_price(self, product_id: str) -> Optional[dict]:
         """Look up a promotion by promotionId or ASIN in the current flyer."""
-        results = self.scrape_circular()
+        try:
+            results = self.scrape_circular()
+        except Exception as exc:
+            logger.error(f"[whole_foods] get_product_price failed for '{product_id}': {exc}")
+            return None
         for r in results:
             if r["product_id"] == product_id:
                 return r

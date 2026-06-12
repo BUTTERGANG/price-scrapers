@@ -11,6 +11,7 @@ import DepartmentsView from './components/DepartmentsView';
 import WatchlistView from './components/WatchlistView';
 import StoresView from './components/StoresView';
 import StatusBar from './components/StatusBar';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const TABS = [
   { id: 'dashboard',   label: 'Dashboard',   icon: '📊' },
@@ -133,14 +134,16 @@ function App() {
       )}
 
       <main>
-        {tab === 'dashboard' && <DashboardView onNavigate={setTab} />}
-        {tab === 'deals' && <DealsView watchlist={watchlist} toggleWatchlist={toggleWatchlist} />}
-        {tab === 'search' && <SearchView watchlist={watchlist} toggleWatchlist={toggleWatchlist} />}
-        {tab === 'compare' && <CompareView />}
-        {tab === 'history' && <HistoryView />}
-        {tab === 'departments' && <DepartmentsView />}
-        {tab === 'watchlist' && <WatchlistView watchlist={watchlist} toggleWatchlist={toggleWatchlist} priceAlerts={priceAlerts} setPriceAlerts={setPriceAlerts} />}
-        {tab === 'stores' && <StoresView />}
+        <ErrorBoundary>
+          {tab === 'dashboard' && <DashboardView onNavigate={setTab} />}
+          {tab === 'deals' && <DealsView watchlist={watchlist} toggleWatchlist={toggleWatchlist} />}
+          {tab === 'search' && <SearchView watchlist={watchlist} toggleWatchlist={toggleWatchlist} />}
+          {tab === 'compare' && <CompareView />}
+          {tab === 'history' && <HistoryView />}
+          {tab === 'departments' && <DepartmentsView />}
+          {tab === 'watchlist' && <WatchlistView watchlist={watchlist} toggleWatchlist={toggleWatchlist} priceAlerts={priceAlerts} setPriceAlerts={setPriceAlerts} />}
+          {tab === 'stores' && <StoresView />}
+        </ErrorBoundary>
       </main>
     </>
   );

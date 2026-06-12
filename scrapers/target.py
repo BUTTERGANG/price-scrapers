@@ -339,6 +339,18 @@ class TargetScraper(BaseScraper):
 
         tcin = str(hs.get("tcin") or "")
         listing_id = str(hs.get("listing_id") or "")
+
+        # Drop category headers / promo-only sections that have no price and
+        # no deal text. These are section dividers in the circular (e.g.
+        # "Hello Summer Sale", "Select golf items", "LEGO Star Wars") that
+        # aren't actual products or deals. They may have a listing_id or even
+        # a tcin, but without a price or deal text they're not useful.
+        if price == 0.0 and not deal_text:
+            logger.debug(
+                "[target] Dropping category header / promo section: %r", title
+            )
+            return None
+
         product_id = tcin or listing_id or title.lower().replace(" ", "_")
 
         return self.normalize_price(

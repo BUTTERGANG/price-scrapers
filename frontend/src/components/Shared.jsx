@@ -33,7 +33,10 @@ export function ProductCard({ item, onHistoryClick, onWatchlist, isWatched, isCh
   let imageUrl = null;
   if (item.extra_json) {
     try {
-      const extra = JSON.parse(item.extra_json);
+      // JSONB columns arrive as objects; legacy TEXT rows as JSON strings
+      const extra = typeof item.extra_json === 'string'
+        ? JSON.parse(item.extra_json)
+        : item.extra_json;
       dealText = extra.deal_text || extra.sale_story;
       imageUrl = extra.image_url || null;
     } catch (e) {

@@ -54,19 +54,30 @@ export default function CompareView() {
     setBasketResults(null);
   };
 
+  // Run promises in batches of `limit` concurrent requests to avoid
+  // overwhelming the backend or hitting browser connection limits.
+  const runBatched = async (items, fn, limit = 5) => {
+    const results = [];
+    for (let i = 0; i < items.length; i += limit) {
+      const batch = items.slice(i, i + limit);
+      const batchResults = await Promise.all(batch.map(fn));
+      results.push(...batchResults);
+    }
+    return results;
+  };
+
   const compareBasket = async () => {
     if (basket.length === 0) return;
     setBasketLoading(true);
     setBasketError(null);
     setBasketResults(null);
     try {
-      const fetches = basket.map(item =>
+      const allResults = await runBatched(basket, item =>
         fetch(`${API_BASE}/compare?q=${encodeURIComponent(item)}`)
           .then(r => r.ok ? r.json() : null)
           .then(d => ({ item, data: d?.comparison || [] }))
           .catch(() => ({ item, data: [] }))
-      );
-      const allResults = await Promise.all(fetches);
+      , 5);
 
       const itemPrices = {};
       const allRetailers = new Set();

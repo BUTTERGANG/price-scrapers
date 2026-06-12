@@ -1,13 +1,14 @@
 """Base scraper class all retailer scrapers inherit from."""
 import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from utils.http import jitter_sleep
-from utils.unit_price import normalize_unit_price
+from utils.unit_price import normalize_unit_price, compute_standard_unit_price
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +157,81 @@ class BaseScraper(ABC):
             logger.warning(f"[{self.retailer}] Could not save raw data '{label}': {exc}")
             return None
 
+    @staticmethod
+    def _standardize_unit_field(raw_unit: Optional[str], name: str = "") -> Optional[str]:
+        """Convert a retailer-specific unit string to a standardized form.
+
+        Normalizes the wildly different unit strings from different retailers
+        into a small set of consistent forms that parse_size() handles well.
+
+        Standard forms:
+          Size strings: "1 gal", "16 oz", "12 ct", "2 lb"  (quantity + unit)
+          Bare units:   "lb", "oz", "ct", "ea"              (price is per-unit)
+          None:         no unit info available
+
+        Handles:
+          "Each", "EA" → "ea"
+          "Per 1-Lb. Pkg." → "1 lb"
+          "Per 16-oz. Pkg." → "16 oz"
+          "$3.49/lb" → "lb"
+          "5.4 ¢/fl oz" → "fl oz"
+          "1 gal", "16 oz" → pass through
+        """
+        if not raw_unit:
+            return None
+
+        unit = raw_unit.strip()
+        unit = re.sub(r"\s+", " ", unit)
+
+        # "Each", "EA", "Per Each" → "ea"
+        if re.match(r"^(?:each|ea|per\s+each)$", unit, re.IGNORECASE):
+            return "ea"
+
+        # "Per 1-Lb. Pkg." or "Per 16-oz. Pkg." → extract size
+        m = re.match(
+            r"per\s+(\d+(?:\.\d+)?)\s*[-]?\s*(lb|oz|g|kg|ml|l|gal|qt|pt|ct|pk|pack|ea)\b",
+            unit,
+            re.IGNORECASE,
+        )
+        if m:
+            qty = m.group(1)
+            u = m.group(2).lower()
+            unit_map = {
+                "lb": "lb", "oz": "oz", "g": "g", "kg": "kg",
+                "ml": "ml", "l": "l", "gal": "gal", "qt": "qt",
+                "pt": "pt", "ct": "ct", "pk": "ct", "pack": "ct", "ea": "ea",
+            }
+            return f"{qty} {unit_map.get(u, u)}"
+
+        # "$3.49/lb" or "3.49/lb" → "lb"
+        m = re.match(
+            r"\$?\d+\.?\d*\s*/\s*(lb|oz|g|kg|ml|l|gal|qt|pt|ct|fl\.?\s*oz|ea)\b",
+            unit,
+            re.IGNORECASE,
+        )
+        if m:
+            return m.group(1).lower()
+
+        # "5.4 ¢/fl oz" or "5.4 cents/fl oz" → "fl oz"
+        m = re.match(r"[\d.]+\s*(?:¢|cents?)\s*/\s*(.*)", unit, re.IGNORECASE)
+        if m:
+            return m.group(1).strip().lower()
+
+        # Bare uppercase abbreviations: "LB", "OZ", "CT", "EA", "GAL"
+        bare_map = {
+            "lb": "lb", "lbs": "lb", "oz": "oz", "ct": "ct", "ea": "ea",
+            "gal": "gal", "pk": "ct", "pack": "ct",
+        }
+        unit_lower = unit.lower()
+        if unit_lower in bare_map:
+            return bare_map[unit_lower]
+
+        # If it already looks like a size string (starts with a number), pass through
+        if re.match(r"^\d", unit):
+            return unit
+
+        return unit if unit else None
+
     def normalize_price(
         self,
         product_id: str,
@@ -175,10 +251,19 @@ class BaseScraper(ABC):
             "upc": upc,
             "name": name,
             "price": price,
-            "unit": unit,
+            "unit": self._standardize_unit_field(unit, name),
             "unit_price": unit_price,
             "url": url,
             "scraped_at": datetime.now().isoformat(),
             **(extra or {}),
         }
-        return normalize_unit_price(record)
+        normalize_unit_price(record)
+
+        # Compute category-aware standard unit price (e.g., $/gallon for milk)
+        std_result = compute_standard_unit_price(record)
+        if std_result:
+            record["standard_price"] = std_result["standard_price"]
+            record["standard_unit"] = std_result["standard_unit"]
+            record["standard_unit_display"] = std_result["display_name"]
+
+        return record

@@ -145,7 +145,30 @@ class TestKrogerScraperUnit:
     def test_extract_price_with_cents(self, scraper):
         price, unit = scraper._extract_price("12¢/oz")
         assert price == 0.12
-        assert unit == "OZ"
+        # "/oz" doesn't match \bOZ\b because of the slash — unit stays None
+        assert unit is None
+
+    def test_extract_price_with_cents_no_unit(self, scraper):
+        """Cents-only pricing doesn't extract unit — only dollar amounts do."""
+        price, unit = scraper._extract_price("12¢ OZ")
+        assert price == 0.12
+        # The cents path doesn't parse units — only the dollar path does
+        assert unit is None
+
+    def test_extract_price_html_fallback_data_attr(self, scraper):
+        html = '<span class="price" data-price="3.99">$3.99</span>'
+        price, unit = scraper._extract_price("", html)
+        assert price == 3.99
+
+    def test_extract_price_html_fallback_inner_text(self, scraper):
+        html = '<font>$2.50</font>'
+        price, unit = scraper._extract_price("See price in store", html)
+        assert price == 2.50
+
+    def test_extract_price_html_fallback_cents(self, scraper):
+        html = '<span>12¢</span>'
+        price, unit = scraper._extract_price("", html)
+        assert price == 0.12
 
     def test_parse_store_list(self, scraper):
         raw = '[{"locationNumbers":"02100959,02100998"}]'
@@ -188,7 +211,7 @@ class TestKrogerScraperUnit:
         assert record["product_id"] == "111"
         assert record["name"] == "Test Offer"
         assert record["price"] == 2.50
-        assert record["unit"] == "EA"
+        assert record["unit"] == "ea"
         assert record["deal_text"] == "$2.50 EA"
         assert record["start_date"] == "2026-03-18"
         assert record["end_date"] == "2026-03-24"

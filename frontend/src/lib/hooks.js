@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export function useLocalStorage(key, initial) {
   const [value, setValue] = useState(() => {
@@ -18,12 +18,15 @@ export function useFetch(url, refreshIntervalMs = 0) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastFetched, setLastFetched] = useState(null);
+  const urlRef = useRef(url);
+  urlRef.current = url;
   const fetchData = useCallback(async () => {
-    if (!url) return;
+    const currentUrl = urlRef.current;
+    if (!currentUrl) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(url);
+      const res = await fetch(currentUrl);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setData(await res.json());
       setLastFetched(new Date());
@@ -32,8 +35,8 @@ export function useFetch(url, refreshIntervalMs = 0) {
     } finally {
       setLoading(false);
     }
-  }, [url]);
-  useEffect(() => { fetchData(); }, [fetchData]);
+  }, []);
+  useEffect(() => { fetchData(); }, [url, fetchData]);
   useEffect(() => {
     if (!refreshIntervalMs) return;
     const id = setInterval(fetchData, refreshIntervalMs);

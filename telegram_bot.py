@@ -165,10 +165,12 @@ def _weekly_specials(category_hint: Optional[str] = None) -> list[dict]:
         results = []
         for row in rows:
             r = dict(row)
-            # Lift deal_text/sale_story out of extra_json for Claude to see
+            # Lift deal_text/sale_story out of extra_json for Claude to see.
+            # JSONB columns arrive as dicts; legacy TEXT rows as JSON strings.
             if r.get("extra_json"):
                 try:
-                    extra = json.loads(r["extra_json"])
+                    raw = r["extra_json"]
+                    extra = json.loads(raw) if isinstance(raw, str) else raw
                     r["deal_text"] = extra.get("deal_text") or extra.get("sale_story")
                 except Exception:
                     pass

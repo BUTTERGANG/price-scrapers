@@ -36,9 +36,9 @@ class TestInsert:
         record = {**sample_price, "brand": "Kroger", "snap_eligible": True}
         insert_price(db_conn, record)
         row = _fetch_one(db_conn, "SELECT brand, extra_json FROM prices LIMIT 1")
-        import json
         assert row["brand"] == "Kroger"
-        extra = json.loads(row["extra_json"])
+        # extra_json is JSONB — psycopg2 returns it already parsed
+        extra = row["extra_json"]
         assert extra.get("snap_eligible") is True
         assert extra.get("category") == "Dairy"
 
