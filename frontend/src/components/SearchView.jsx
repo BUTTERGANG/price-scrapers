@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { API_BASE } from '../lib/utils';
 import { ProductCard, SkeletonGrid } from './Shared';
 
-export default function SearchView({ watchlist, toggleWatchlist }) {
+export default function SearchView({ watchlist, toggleWatchlist, onHistoryClick }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -104,6 +104,7 @@ export default function SearchView({ watchlist, toggleWatchlist }) {
               onWatchlist={toggleWatchlist}
               isWatched={watchedIds.has(`${item.retailer}::${item.product_id}`)}
               isCheapest={idx === 0}
+              onHistoryClick={onHistoryClick}
             />
           ))}
         </div>

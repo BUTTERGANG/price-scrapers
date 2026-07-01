@@ -597,6 +597,7 @@ def normalize_unit_price(record: dict) -> dict:
             record.get("deal_text") or "",
             record.get("unit_price") or "",
             record.get("sale_unit_price") or "",
+            record.get("description") or "",
         )
         for field_val in extra_fields:
             field_str = str(field_val).strip()

@@ -89,6 +89,18 @@ def validate_results(
             )
             continue
 
+        # No usable price AND no deal context — the record carries no
+        # information a user can act on (e.g. Target catalog rows that come
+        # back with current_retail=0). Dropping these at the source keeps
+        # search/compare clean instead of polluting them with $0 items.
+        effective = sale_price if sale_price is not None else price
+        if (not effective or effective <= 0) and not _has_deal_context(r):
+            issues.append(
+                f"[{retailer}] DROP: no usable price and no deal text for {name!r} "
+                f"(product_id={pid!r}) — likely a catalog/parse artifact"
+            )
+            continue
+
         # ------------------------------------------------------------------
         # Deduplication — keep only the first occurrence per product_id
         # ------------------------------------------------------------------

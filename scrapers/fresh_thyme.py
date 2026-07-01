@@ -218,6 +218,7 @@ class FreshThymeScraper(BaseScraper):
 
             unit = (item.get("post_price_text") or "").strip() or None
             deal = (item.get("sale_story") or "").strip() or None
+            description = (item.get("description") or "").strip() or None
             web_url = item.get("web_commission_url") or item.get("item_web_url") or ""
 
             results.append(
@@ -231,6 +232,8 @@ class FreshThymeScraper(BaseScraper):
                         "deal_text": deal,
                         "valid_from": item.get("valid_from"),
                         "valid_to": item.get("valid_to"),
+                        "image_url": item.get("image_url"),
+                        "description": description,
                     },
                 )
             )

@@ -268,6 +268,7 @@ class WholeFoodsScraper(BaseScraper):
                 "valid_from": promo.get("startDate"),
                 "valid_to": promo.get("endDate"),
                 "description": (promo.get("description") or "").strip() or None,
+                "image_url": promo.get("productImage") or None,
             },
         )
 

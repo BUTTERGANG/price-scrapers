@@ -11,6 +11,16 @@ export const timeAgo = (ts) => {
   return `${Math.floor(hours / 24)}d ago`;
 };
 
+// Bucket a scrape timestamp into a freshness level for color-coding:
+// fresh (<24h), aging (1–7d), stale (>7d), unknown (no timestamp).
+export const freshnessLevel = (ts) => {
+  if (!ts) return 'unknown';
+  const hours = (Date.now() - new Date(ts).getTime()) / 3600000;
+  if (hours < 24) return 'fresh';
+  if (hours < 24 * 7) return 'aging';
+  return 'stale';
+};
+
 export const fmtPrice = (v) => v != null ? `$${Number(v).toFixed(2)}` : '--';
 export const fmtPct = (v) => v != null ? `${Number(v).toFixed(1)}%` : '--';
 export const fmtUnitPrice = (value, canonical) => {
@@ -65,3 +75,22 @@ export const getDeptIcon = (name) => {
 
 export const THIRTY_MIN = 30 * 60 * 1000;
 export const FIVE_MIN = 5 * 60 * 1000;
+
+// Buy/wait signal for a single item's price history, in the spirit of
+// camelcamelcamel: is the current price near the historical floor (buy),
+// near/above the average (wait), or too little history to say yet.
+export const priceSignal = (current, min, avg, sampleCount) => {
+  if (current == null || sampleCount < 3) {
+    return { tone: 'neutral', icon: '—', label: 'Not enough history yet' };
+  }
+  if (current <= min * 1.03) {
+    return { tone: 'buy', icon: '🔥', label: 'Near all-time low — great time to buy' };
+  }
+  if (current <= avg * 0.95) {
+    return { tone: 'buy', icon: '✓', label: 'Below average — good time to buy' };
+  }
+  if (current >= avg * 1.08) {
+    return { tone: 'wait', icon: '⏳', label: 'Above average — may be worth waiting' };
+  }
+  return { tone: 'neutral', icon: '•', label: 'Typical price for this item' };
+};

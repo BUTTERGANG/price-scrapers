@@ -1,15 +1,18 @@
-import { getRetailerColor, fmtUnitPrice, timeAgo } from '../lib/utils';
+import { getRetailerColor, fmtUnitPrice, timeAgo, freshnessLevel } from '../lib/utils';
 
 export function StatusBadge({ status }) {
   const styles = {
     success:   { bg: 'rgba(34,197,94,0.15)',   color: '#4ade80',  border: 'rgba(34,197,94,0.3)',   dot: '#22c55e' },
     partial:   { bg: 'rgba(250,204,21,0.15)',   color: '#fde047',  border: 'rgba(250,204,21,0.3)',  dot: '#eab308' },
+    empty:     { bg: 'rgba(249,115,22,0.15)',   color: '#fdba74',  border: 'rgba(249,115,22,0.3)',  dot: '#f97316' },
     failed:    { bg: 'rgba(239,68,68,0.15)',    color: '#fca5a5',  border: 'rgba(239,68,68,0.3)',   dot: '#ef4444' },
     running:   { bg: 'rgba(59,130,246,0.15)',   color: '#93c5fd',  border: 'rgba(59,130,246,0.3)',  dot: '#3b82f6' },
+    disabled:  { bg: 'rgba(100,116,139,0.12)',  color: '#94a3b8',  border: 'rgba(100,116,139,0.2)', dot: '#64748b' },
     never_run: { bg: 'rgba(100,116,139,0.12)',  color: '#94a3b8',  border: 'rgba(100,116,139,0.2)', dot: '#64748b' },
   };
   const s = styles[status] || styles.never_run;
-  const label = status === 'never_run' ? 'Never Run' : status.charAt(0).toUpperCase() + status.slice(1);
+  const LABELS = { never_run: 'Never Run', empty: 'No Data', disabled: 'Disabled' };
+  const label = LABELS[status] || status.charAt(0).toUpperCase() + status.slice(1);
   return (
     <span className="status-badge" style={{ background: s.bg, color: s.color, borderColor: s.border, border: `1px solid ${s.border}` }}>
       <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: s.dot, marginRight: 5, verticalAlign: 'middle', flexShrink: 0 }} />
@@ -127,6 +130,14 @@ export function ProductCard({ item, onHistoryClick, onWatchlist, isWatched, isCh
           <span className="meta-unit-price">{fmtUnitPrice(item.unit_price_normalized, item.unit_canonical)}</span>
         )}
       </div>
+
+      {/* Freshness — when this price was last pulled */}
+      {item.scraped_at && (
+        <div className={`freshness-chip freshness-${freshnessLevel(item.scraped_at)}`}>
+          <span className="freshness-dot" aria-hidden="true" />
+          Updated {timeAgo(item.scraped_at)}
+        </div>
+      )}
 
       {onHistoryClick && (
         <button className="history-btn" onClick={() => onHistoryClick(item.retailer, item.product_id, item.name)}>

@@ -17,6 +17,8 @@
       "store_id": "2787",
       "name": "Walmart Supercenter #2787",
       "address": "7325 N Keystone Ave, Indianapolis, IN 46240",
+      "disabled": true,
+      "disabled_reason": "PerimeterX bot detection blocks datacenter IPs. Re-enable with a residential proxy.",
       "note": "Confirmed via walmart.com/store/2787-indianapolis-in"
     },
     "meijer": {
@@ -89,6 +91,8 @@
       "store_id": "346",
       "name": "Costco Castleton #346",
       "address": "6110 E 86th St, Indianapolis, IN 46250",
+      "disabled": true,
+      "disabled_reason": "Strict bot detection blocks automated access; in-warehouse shelf prices not published.",
       "note": "Online prices only — in-warehouse shelf prices not published. Requires Playwright."
     },
     "needlers": {

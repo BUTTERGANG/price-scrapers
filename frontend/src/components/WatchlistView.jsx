@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { API_BASE, FIVE_MIN } from '../lib/utils';
 import { ProductCard, SkeletonGrid, DataFreshnessBar } from './Shared';
 
-export default function WatchlistView({ watchlist, toggleWatchlist, priceAlerts, setPriceAlerts }) {
+export default function WatchlistView({ watchlist, toggleWatchlist, priceAlerts, setPriceAlerts, onHistoryClick }) {
   const [liveItems, setLiveItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -92,6 +92,7 @@ export default function WatchlistView({ watchlist, toggleWatchlist, priceAlerts,
                   item={item}
                   onWatchlist={toggleWatchlist}
                   isWatched={watchedIds.has(key)}
+                  onHistoryClick={onHistoryClick}
                 />
                 <div className="alert-row">
                   {isTriggered && <span className="alert-badge">🔔 Price alert!</span>}
@@ -100,6 +101,7 @@ export default function WatchlistView({ watchlist, toggleWatchlist, priceAlerts,
                     <span className="alert-dollar">$</span>
                     <input
                       type="number"
+                      inputMode="decimal"
                       className="alert-input"
                       placeholder="—"
                       min="0"

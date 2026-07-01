@@ -49,12 +49,21 @@ class TestDedup:
         assert len(valid) == 2
 
 
-class TestSoftWarnings:
-    def test_zero_price_without_deal_context_warns_but_keeps(self):
+class TestZeroPriceDrops:
+    def test_zero_price_without_deal_context_is_dropped(self):
+        # No usable price and no deal text — nothing a user can act on
+        # (e.g. Target $0 catalog rows). These are dropped at the source.
         valid, issues = validate_results([_record(price=0)], "kroger")
-        assert len(valid) == 1
-        assert any("price=$0" in i for i in issues)
+        assert valid == []
+        assert any("DROP" in i and "no usable price" in i for i in issues)
 
+    def test_zero_regular_but_sale_price_set_is_kept(self):
+        # A real sale price means there's a usable number even if price=0.
+        valid, _ = validate_results([_record(price=0, sale_price=1.99)], "kroger")
+        assert len(valid) == 1
+
+
+class TestSoftWarnings:
     def test_zero_price_with_deal_text_is_fine(self):
         valid, issues = validate_results(
             [_record(price=0, deal_text="BOGO Free")], "kroger"

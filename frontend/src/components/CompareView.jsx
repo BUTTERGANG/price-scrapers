@@ -3,7 +3,7 @@ import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { useLocalStorage } from '../lib/hooks';
-import { API_BASE, fmtPrice, fmtUnitPrice } from '../lib/utils';
+import { API_BASE, fmtPrice, timeAgo, freshnessLevel } from '../lib/utils';
 import { Spinner } from './Shared';
 
 const STANDARD_GROCERY_LIST = [
@@ -13,7 +13,10 @@ const STANDARD_GROCERY_LIST = [
 
 export default function CompareView() {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
+  // result is the /api/compare/standard payload:
+  // { standard_unit, standard_unit_display, comparable[], comparable_count,
+  //   uncomparable[], uncomparable_count }
+  const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [basket, setBasket] = useLocalStorage('market_basket', []);
@@ -25,11 +28,14 @@ export default function CompareView() {
   const doCompare = async (e) => {
     if (e) e.preventDefault();
     if (!query.trim()) return;
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setResult(null);
     try {
-      const res = await fetch(`${API_BASE}/compare?q=${encodeURIComponent(query)}`);
+      // Standard endpoint groups results by a common unit (per gallon, per
+      // dozen, per lb…) so prices are genuinely like-for-like instead of
+      // comparing a candy bar to a half-gallon of milk.
+      const res = await fetch(`${API_BASE}/compare/standard?q=${encodeURIComponent(query)}`);
       if (!res.ok) throw new Error('Failed to fetch');
-      setResults((await res.json()).comparison || []);
+      setResult(await res.json());
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
   };
@@ -117,16 +123,24 @@ export default function CompareView() {
     }
   };
 
-  const chartData = results.map((item, idx) => ({
+  const comparable = result?.comparable || [];
+  const uncomparable = result?.uncomparable || [];
+  const unitLabel = result?.standard_unit_display || null;
+  const hasComparable = comparable.length > 0;
+
+  // Chart of the standardized price per retailer (cheapest highlighted green).
+  const chartData = comparable.map((item, idx) => ({
     retailer: item.retailer,
-    price: item.sale_price != null ? item.sale_price : (item.price || 0),
+    price: item.standard_price,
     name: item.name?.substring(0, 30),
     fill: idx === 0 ? '#22c55e' : null,
   }));
 
+  const stdLabelShort = unitLabel ? unitLabel.replace(/^per\s+/, '/') : '';
+
   return (
     <div>
-      <form className="search-bar" onSubmit={doCompare} style={{ marginBottom: '2rem' }}>
+      <form className="search-bar" onSubmit={doCompare} style={{ marginBottom: '1rem' }}>
         <input type="text" placeholder="Compare a single item across retailers (e.g. milk, eggs)..." value={query} onChange={(e) => setQuery(e.target.value)} />
         <button type="submit">Compare</button>
       </form>
@@ -134,80 +148,132 @@ export default function CompareView() {
       {loading && <Spinner />}
       {error && <div className="error">Error: {error}</div>}
 
-      {!loading && !error && results.length > 0 && (
+      {!loading && !error && result && (
         <>
-          <div className="chart-card" style={{ marginBottom: '1.5rem' }}>
-            <h3>Price Comparison — {query}</h3>
-            <ResponsiveContainer width="100%" height={Math.max(200, results.length * 44)}>
-              <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 20, top: 4, bottom: 4 }}>
-                <defs>
-                  <linearGradient id="barGrad" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.9} />
-                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0.8} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
-                <XAxis type="number" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `$${v.toFixed(2)}`} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="retailer" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }} width={110} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#f1f5f9', fontSize: 13 }}
-                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
-                  formatter={v => [fmtPrice(v), 'Price']}
-                />
-                <Bar dataKey="price" fill="url(#barGrad)" radius={[0, 6, 6, 0]}>
-                  {chartData.map((item) => (
-                    <Cell key={item.retailer} fill={item.fill || 'url(#barGrad)'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {results.length > 1 && (() => {
-            const effectivePrice = (item) => item.sale_price != null ? item.sale_price : item.price;
-            return (
-              <div className="cheapest-callout">
-                <span className="cheapest-callout-icon">🏆</span>
-                <span>
-                  <strong>{results[0].retailer}</strong> is cheapest at <strong>{fmtPrice(effectivePrice(results[0]))}</strong>
-                  {' — saves '}<strong className="savings-highlight">{fmtPrice(effectivePrice(results[1]) - effectivePrice(results[0]))}</strong>
-                  {' vs '}{results[1].retailer}
-                </span>
+          {hasComparable && (
+            <>
+              <div className="compare-unit-banner">
+                Comparing <strong>{query}</strong> {unitLabel
+                  ? <>by a common unit — <strong>{unitLabel}</strong></>
+                  : null}
               </div>
-            );
-          })()}
 
-          <div className="compare-table-wrap" style={{ marginBottom: '2rem' }}>
-            <table className="compare-table">
-              <thead>
-                <tr>
-                  <th>#</th><th>Retailer</th><th>Product</th><th>Price</th><th>Sale</th><th>Unit Price</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((item, idx) => {
-                  const isBest = idx === 0;
-                  return (
-                    <tr key={`${item.retailer}-${item.product_id}-${idx}`} className={isBest ? 'best-row' : ''}>
-                      <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}</td>
-                      <td className="retailer-cell">
-                        {item.retailer}
-                        {isBest && <span className="best-price-label">★ Best</span>}
-                      </td>
-                      <td className="name-cell">{item.name}</td>
-                      <td style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtPrice(item.price)}</td>
-                      <td>{item.sale_price ? <span className="sale-price">{fmtPrice(item.sale_price)}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                      <td style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {item.unit_price_normalized && item.unit_canonical
-                          ? fmtUnitPrice(item.unit_price_normalized, item.unit_canonical)
-                          : fmtPrice(item.sale_price != null ? item.sale_price : item.price)}
-                      </td>
+              <div className="chart-card" style={{ marginBottom: '1.5rem' }}>
+                <h3>Standardized price ({unitLabel}) — {query}</h3>
+                <ResponsiveContainer width="100%" height={Math.max(200, comparable.length * 44)}>
+                  <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 20, top: 4, bottom: 4 }}>
+                    <defs>
+                      <linearGradient id="barGrad" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#6366f1" stopOpacity={0.8} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `$${v.toFixed(2)}`} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="retailer" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }} width={110} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#f1f5f9', fontSize: 13 }}
+                      cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                      formatter={v => [`${fmtPrice(v)} ${stdLabelShort}`, unitLabel]}
+                    />
+                    <Bar dataKey="price" fill="url(#barGrad)" radius={[0, 6, 6, 0]}>
+                      {chartData.map((item) => (
+                        <Cell key={item.retailer} fill={item.fill || 'url(#barGrad)'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              {comparable.length > 1 && (
+                <div className="cheapest-callout">
+                  <span className="cheapest-callout-icon">🏆</span>
+                  <span>
+                    <strong>{comparable[0].retailer}</strong> is cheapest at{' '}
+                    <strong>{fmtPrice(comparable[0].standard_price)} {stdLabelShort}</strong>
+                    {' — saves '}
+                    <strong className="savings-highlight">
+                      {fmtPrice(comparable[1].standard_price - comparable[0].standard_price)} {stdLabelShort}
+                    </strong>
+                    {' vs '}{comparable[1].retailer}
+                  </span>
+                </div>
+              )}
+
+              <div className="compare-table-wrap" style={{ marginBottom: '2rem' }}>
+                <table className="compare-table">
+                  <thead>
+                    <tr>
+                      <th>#</th><th>Retailer</th><th>Product</th><th>Shelf Price</th>
+                      <th>{unitLabel || 'Unit Price'}</th><th>Updated</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {comparable.map((item, idx) => {
+                      const isBest = idx === 0;
+                      const shelf = item.sale_price != null ? item.sale_price : item.price;
+                      return (
+                        <tr key={`${item.retailer}-${item.product_id}-${idx}`} className={isBest ? 'best-row' : ''}>
+                          <td style={{ fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}</td>
+                          <td className="retailer-cell">
+                            {item.retailer}
+                            {isBest && <span className="best-price-label">★ Best</span>}
+                          </td>
+                          <td className="name-cell">{item.name}</td>
+                          <td style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtPrice(shelf)}</td>
+                          <td style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
+                            {fmtPrice(item.standard_price)} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>{stdLabelShort}</span>
+                          </td>
+                          <td className={`freshness-${freshnessLevel(item.scraped_at)}`} style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                            {item.scraped_at ? timeAgo(item.scraped_at) : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {/* Items that couldn't be standardized into the common unit */}
+          {uncomparable.length > 0 && (
+            <div className="compare-table-wrap" style={{ marginBottom: '2rem' }}>
+              <h4 style={{ margin: '0 0 0.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 600 }}>
+                {hasComparable
+                  ? 'Other matches (different size/unit — not directly comparable)'
+                  : `Couldn't standardize "${query}" to a common unit — showing closest matches`}
+              </h4>
+              <table className="compare-table">
+                <thead>
+                  <tr><th>Retailer</th><th>Product</th><th>Price</th><th>Updated</th></tr>
+                </thead>
+                <tbody>
+                  {uncomparable.map((item, idx) => {
+                    const shelf = item.sale_price != null ? item.sale_price : item.price;
+                    return (
+                      <tr key={`${item.retailer}-${item.product_id}-u${idx}`}>
+                        <td className="retailer-cell">{item.retailer}</td>
+                        <td className="name-cell">{item.name}</td>
+                        <td style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtPrice(shelf)}</td>
+                        <td className={`freshness-${freshnessLevel(item.scraped_at)}`} style={{ fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                          {item.scraped_at ? timeAgo(item.scraped_at) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!hasComparable && uncomparable.length === 0 && (
+            <div className="empty">
+              <span className="empty-icon">⚖️</span>
+              <div className="empty-title">No matches found</div>
+              <div className="empty-desc">No products matched "{query}". Try a different term.</div>
+            </div>
+          )}
         </>
       )}
 

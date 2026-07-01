@@ -22,7 +22,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(message)s")
 logger = logging.getLogger(__name__)
 
-from utils import init_db, cleanup_old_prices, get_conn, release_conn
+from utils import init_db, cleanup_old_prices, reap_stale_runs, get_conn, release_conn
 
 
 # ---------------------------------------------------------------------------
@@ -100,6 +100,15 @@ def _start_scheduler():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # Clear zombie 'running' runs left behind by a previous crash/redeploy.
+    conn = None
+    try:
+        conn = get_conn()
+        reap_stale_runs(conn, max_age_hours=6)
+    except Exception as exc:
+        logger.warning(f"Could not reap stale runs at startup: {exc}")
+    finally:
+        release_conn(conn)
     scheduler = _start_scheduler()
     yield
     if scheduler:

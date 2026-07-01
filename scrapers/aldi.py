@@ -217,6 +217,7 @@ class AldiScraper(BaseScraper):
                         "in_store_only": item.get("in_store_only", True),
                         "valid_from": item.get("valid_from"),
                         "valid_to": item.get("valid_to"),
+                        "image_url": item.get("image_url"),
                     },
                 )
             )

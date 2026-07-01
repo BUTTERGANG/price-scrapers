@@ -17,11 +17,25 @@ def get_stores():
     conn = get_conn()
     try:
         runs = get_store_status(conn)
-        configured = list(_STORES.get("stores", {}).keys())
+        stores_cfg = _STORES.get("stores", {})
+        configured = list(stores_cfg.keys())
         run_map = {r["retailer"]: r for r in runs}
         result = []
         for name in configured:
-            if name in run_map:
+            cfg = stores_cfg.get(name, {})
+            # Disabled retailers (e.g. Walmart/Costco, blocked by bot detection)
+            # report as 'disabled' regardless of any stale historical run so they
+            # never masquerade as healthy successes.
+            if cfg.get("disabled"):
+                result.append({
+                    "retailer": name,
+                    "status": "disabled",
+                    "records_saved": 0,
+                    "started_at": None,
+                    "finished_at": None,
+                    "error": cfg.get("disabled_reason"),
+                })
+            elif name in run_map:
                 result.append(run_map[name])
             else:
                 result.append({

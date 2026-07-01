@@ -450,6 +450,12 @@ def finish_run(
         status = "failed"
     elif queries_failed > 0:
         status = "partial"
+    elif not records_saved:
+        # A run that completed without error but saved zero records isn't a
+        # success — it means the scraper returned nothing usable (site change,
+        # silent bot block, or an empty circular). Surface it as 'empty' so it
+        # doesn't masquerade as healthy in the dashboard or skew success rates.
+        status = "empty"
     else:
         status = "success"
 
@@ -469,6 +475,33 @@ def finish_run(
              error, datetime.now(timezone.utc), run_id),
         )
     conn.commit()
+
+
+def reap_stale_runs(conn, max_age_hours: int = 6) -> int:
+    """Mark runs still 'running' after max_age_hours as 'failed'.
+
+    A run is only ever left 'running' if the process died mid-scrape (crash,
+    redeploy, OOM). Those zombies otherwise linger forever, skew scraper
+    stats, and can confuse "is a scrape in progress" checks. Call once at
+    startup. Returns the number of runs reaped.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE runs
+            SET status      = 'failed',
+                error       = COALESCE(error, 'reaped: run never finished (stale)'),
+                finished_at = COALESCE(finished_at, NOW())
+            WHERE status = 'running'
+              AND started_at < NOW() - make_interval(hours => %s)
+            """,
+            (max_age_hours,),
+        )
+        reaped = cur.rowcount
+    conn.commit()
+    if reaped:
+        logger.info(f"reap_stale_runs: marked {reaped} stale 'running' run(s) as failed")
+    return reaped
 
 
 def log_failed_query(
@@ -867,6 +900,7 @@ def cheapest_per_retailer_standard(
                AND p.scraped_at = latest_only.latest
             WHERE {name_clause}
               AND p.standard_price IS NULL
+              AND COALESCE(p.sale_price, p.price) > 0
             ORDER BY COALESCE(p.sale_price, p.price) ASC
             """,
             params,

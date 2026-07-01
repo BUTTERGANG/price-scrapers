@@ -3,7 +3,7 @@ import { useFetch } from '../lib/hooks';
 import { API_BASE, THIRTY_MIN, timeAgo } from '../lib/utils';
 import { ProductCard, SkeletonGrid, DataFreshnessBar } from './Shared';
 
-export default function DealsView({ watchlist, toggleWatchlist }) {
+export default function DealsView({ watchlist, toggleWatchlist, onHistoryClick }) {
   const [minPct, setMinPct] = useState(10);
   const [deptFilter, setDeptFilter] = useState('');
   const [groupBy, setGroupBy] = useState('none');
@@ -129,6 +129,7 @@ export default function DealsView({ watchlist, toggleWatchlist }) {
                 item={item}
                 onWatchlist={toggleWatchlist}
                 isWatched={watchedIds.has(`${item.retailer}::${item.product_id}`)}
+                onHistoryClick={onHistoryClick}
               />
             ))}
           </div>

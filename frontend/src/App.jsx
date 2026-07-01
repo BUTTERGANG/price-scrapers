@@ -12,6 +12,7 @@ import WatchlistView from './components/WatchlistView';
 import StoresView from './components/StoresView';
 import StatusBar from './components/StatusBar';
 import ErrorBoundary from './components/ErrorBoundary';
+import PriceHistoryModal from './components/PriceHistoryModal';
 
 const TABS = [
   { id: 'dashboard',   label: 'Dashboard',   icon: '📊' },
@@ -32,12 +33,17 @@ function App() {
   const [priceAlerts, setPriceAlerts] = useLocalStorage('price_alerts', {});
   const [moreOpen, setMoreOpen] = useState(false);
   const [theme, setTheme] = useLocalStorage('theme', 'dark');
+  const [historyItem, setHistoryItem] = useState(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
   const alertCount = Object.keys(priceAlerts).length;
+
+  const openHistory = useCallback((retailer, product_id, name) => {
+    setHistoryItem({ retailer, product_id, name });
+  }, []);
 
   const toggleWatchlist = useCallback((item) => {
     setWatchlist(prev => {
@@ -136,15 +142,19 @@ function App() {
       <main>
         <ErrorBoundary>
           {tab === 'dashboard' && <DashboardView onNavigate={setTab} />}
-          {tab === 'deals' && <DealsView watchlist={watchlist} toggleWatchlist={toggleWatchlist} />}
-          {tab === 'search' && <SearchView watchlist={watchlist} toggleWatchlist={toggleWatchlist} />}
+          {tab === 'deals' && <DealsView watchlist={watchlist} toggleWatchlist={toggleWatchlist} onHistoryClick={openHistory} />}
+          {tab === 'search' && <SearchView watchlist={watchlist} toggleWatchlist={toggleWatchlist} onHistoryClick={openHistory} />}
           {tab === 'compare' && <CompareView />}
           {tab === 'history' && <HistoryView />}
           {tab === 'departments' && <DepartmentsView />}
-          {tab === 'watchlist' && <WatchlistView watchlist={watchlist} toggleWatchlist={toggleWatchlist} priceAlerts={priceAlerts} setPriceAlerts={setPriceAlerts} />}
+          {tab === 'watchlist' && <WatchlistView watchlist={watchlist} toggleWatchlist={toggleWatchlist} priceAlerts={priceAlerts} setPriceAlerts={setPriceAlerts} onHistoryClick={openHistory} />}
           {tab === 'stores' && <StoresView />}
         </ErrorBoundary>
       </main>
+
+      {historyItem && (
+        <PriceHistoryModal item={historyItem} onClose={() => setHistoryItem(null)} />
+      )}
     </>
   );
 }
