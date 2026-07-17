@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
 from utils import finish_run, insert_many, last_successful_run, start_run, get_conn, release_conn, check_price_alerts
+from utils.notify import notify
 from utils.store_config import get_locations
 from utils.validate import check_count_drop, validate_results
 
@@ -243,7 +244,7 @@ def _run_one(entry: RegistryEntry, items: list[str]) -> list[dict]:
             saved = insert_many(conn, valid)
 
             # Check watchlist alerts for any price drops
-            alerts_triggered = 0
+            triggered: list[dict] = []
             for rec in valid:
                 effective_price = rec.get("sale_price") or rec.get("price")
                 if effective_price is None:
@@ -256,13 +257,19 @@ def _run_one(entry: RegistryEntry, items: list[str]) -> list[dict]:
                     name=rec.get("name", ""),
                 )
                 if alert:
-                    alerts_triggered += 1
+                    triggered.append(alert)
                     logger.info(
                         f"[{name}] Price alert triggered: {rec.get('name')} "
                         f"at ${effective_price} (target: ${alert['target_price']})"
                     )
-            if alerts_triggered:
-                logger.info(f"[{name}] {alerts_triggered} price alert(s) triggered.")
+            if triggered:
+                logger.info(f"[{name}] {len(triggered)} price alert(s) triggered.")
+                lines = [
+                    f"• {a['name'] or a['product_id']} — ${a['triggered_price']} "
+                    f"(target ${a['target_price']}) at {a['retailer']}"
+                    for a in triggered
+                ]
+                notify("🔔 Price alert\n" + "\n".join(lines))
 
             # queries_ok=1 represents the single scrape call succeeding
             finish_run(conn, run_id, 1, 0, saved, None)
@@ -277,6 +284,7 @@ def _run_one(entry: RegistryEntry, items: list[str]) -> list[dict]:
         except Exception as e:
             logger.error(f"[{name}] Failed: {e}")
             finish_run(conn, run_id, 0, 0, 0, str(e))
+            notify(f"❌ Scraper failed: {name}\n{str(e)[:500]}")
             return []
     finally:
         release_conn(conn)

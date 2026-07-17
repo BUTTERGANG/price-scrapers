@@ -102,3 +102,59 @@ def test_expected_stores_includes_disabled(stores):
     assert "PerimeterX" in by_key["walmart"]["disabled_reason"]
     assert by_key["aldi"]["disabled"] is False
     assert by_key["fresh_market_146th"]["store_id"] == "56"
+
+
+# ---------------------------------------------------------------------------
+# _run_one notification wiring — scraper failures and price alerts must
+# reach utils.notify.notify (Telegram), not just the log.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def patched_runner_db(db_conn, monkeypatch):
+    """Route runner's pool access to the disposable test schema."""
+    import runner
+    monkeypatch.setattr(runner, "get_conn", lambda: db_conn)
+    monkeypatch.setattr(runner, "release_conn", lambda c: None)
+    return db_conn
+
+
+def _entry(fn):
+    from runner import RegistryEntry
+    return RegistryEntry(key="kroger", retailer="kroger", store_id="01400441",
+                         location={}, fn=fn)
+
+
+def test_run_one_notifies_on_failure(patched_runner_db, monkeypatch):
+    import runner
+    sent = []
+    monkeypatch.setattr(runner, "notify", sent.append)
+
+    def _boom(items):
+        raise RuntimeError("layout changed")
+
+    assert runner._run_one(_entry(_boom), []) == []
+    assert len(sent) == 1
+    assert "Scraper failed: kroger" in sent[0]
+    assert "layout changed" in sent[0]
+
+
+def test_run_one_notifies_on_price_alert(patched_runner_db, monkeypatch, sample_price):
+    import runner
+    from utils.db import add_watchlist_item
+
+    add_watchlist_item(patched_runner_db, sample_price["retailer"],
+                       sample_price["product_id"], name=sample_price["name"],
+                       target_price=sample_price["price"] + 1)
+    sent = []
+    monkeypatch.setattr(runner, "notify", sent.append)
+
+    results = runner._run_one(_entry(lambda items: [dict(sample_price)]), [])
+    assert len(results) == 1
+    assert len(sent) == 1
+    assert "Price alert" in sent[0]
+    assert sample_price["name"] in sent[0]
+
+    # Same price on the next run → alert deduplicated, nothing sent
+    sent.clear()
+    runner._run_one(_entry(lambda items: [dict(sample_price)]), [])
+    assert sent == []

@@ -87,7 +87,12 @@ without credentials.
 - `NEONDB1` — NeonDB PostgreSQL connection string (primary)
 - `DATABASE_URL` — Fallback PostgreSQL connection string (Replit built-in)
 - `ANTHROPIC_API_KEY` — Required for Needler's circular vision scraping and Telegram `/ask`
-- `TELEGRAM_BOT_TOKEN` — Required for Telegram bot
+- `TELEGRAM_BOT_TOKEN` — Required for Telegram bot and scrape notifications
+- `TELEGRAM_CHAT_ID` — Optional; comma-separated chat IDs for price-alert /
+  scraper-failure notifications (`utils/notify.py`). Sending the bot `/start`
+  registers a chat in `config/notify.json` (gitignored) as an alternative.
+  Alerts dedupe: a sale persisting across 6-hour scrapes won't re-notify until
+  the previous alert is acknowledged in the dashboard.
 
 ## Dependencies
 

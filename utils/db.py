@@ -1550,6 +1550,15 @@ def check_price_alerts(conn, retailer: str, product_id: str, new_price: float, n
         hit = cur.fetchone()
         if hit is None:
             return None
+        # A sale that persists across scrapes (every 6h) would otherwise
+        # re-trigger on every run: skip while an unacknowledged alert for
+        # this watchlist item exists.
+        cur.execute(
+            "SELECT 1 FROM price_alerts WHERE watchlist_id = %s AND NOT acknowledged LIMIT 1",
+            (hit["id"],),
+        )
+        if cur.fetchone() is not None:
+            return None
         # Create an alert record
         cur.execute(
             """

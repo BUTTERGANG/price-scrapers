@@ -11,6 +11,10 @@ Commands:
 
 Plain-text messages are treated as /ask queries when ANTHROPIC_API_KEY is set.
 
+Sending /start registers the chat in config/notify.json; the scraper runner
+then pushes price alerts and scraper-failure notifications to it (see
+utils/notify.py — TELEGRAM_CHAT_ID env var also works without /start).
+
 Required environment variables (in .env):
     TELEGRAM_BOT_TOKEN   — from @BotFather
     ANTHROPIC_API_KEY    — optional; enables /ask command
@@ -509,6 +513,8 @@ async def _run_ask(question: str) -> str:
 # ---------------------------------------------------------------------------
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    from utils.notify import register_chat
+    register_chat(update.effective_chat.id)
     has_claude = bool(os.getenv("ANTHROPIC_API_KEY"))
     ask_line = (
         "  /ask `<question>` — ask anything in plain English\n"
@@ -524,7 +530,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "  /price `<item>` — cheapest price across stores\n"
         "  /deals `[min%]` — active deals \\(default: 10% off\\)\n"
         "  /compare `<item>` — unit price comparison\n"
-        + ask_line,
+        + ask_line
+        + "\nPrice alerts and scraper failures will be sent to this chat\\.",
         parse_mode="MarkdownV2",
     )
 

@@ -1,4 +1,5 @@
 .env
+config/notify.json
 data/raw/
 data/prices/
 data/deals/
