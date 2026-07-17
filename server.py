@@ -37,7 +37,8 @@ def _scheduled_scrape():
         app.state.scrape_running = True
     try:
         from runner import run_retailers
-        stores = json.loads(Path("config/stores.json").read_text()).get("stores", {})
+        from utils.store_config import load_stores
+        stores = load_stores()
         items = json.loads(Path("config/items.json").read_text()).get("queries", [])
         logger.info("Scheduled scrape starting...")
         run_retailers([], stores, items, workers=4)

@@ -18,6 +18,8 @@ def trigger_scrape(request: Request, retailers: list[str] = Query(default=[])):
     import json
     from pathlib import Path
 
+    from utils.store_config import load_stores
+
     scrape_lock: threading.Lock = request.app.state.scrape_lock
 
     with scrape_lock:
@@ -28,7 +30,7 @@ def trigger_scrape(request: Request, retailers: list[str] = Query(default=[])):
             )
         request.app.state.scrape_running = True
 
-    stores = json.loads(Path("config/stores.json").read_text()).get("stores", {})
+    stores = load_stores()
     items = json.loads(Path("config/items.json").read_text()).get("queries", [])
 
     from runner import run_retailers, available_retailers

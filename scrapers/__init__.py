@@ -12,6 +12,9 @@ from .harvest_market import HarvestMarketScraper
 from .giant_eagle import GiantEagleScraper
 from .gfs import GFSScraper
 from .needlers import NeedlersScraper
+from .needlers_circular import NeedlersCircularScraper
+from .flipp import FlippScraper
+from .webstop import WebstopScraper
 
 __all__ = [
     "BaseScraper",
@@ -30,4 +33,7 @@ __all__ = [
     "GiantEagleScraper",
     "GFSScraper",
     "NeedlersScraper",
+    "NeedlersCircularScraper",
+    "FlippScraper",
+    "WebstopScraper",
 ]

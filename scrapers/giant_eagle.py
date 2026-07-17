@@ -177,14 +177,17 @@ query FlippAdBlocksForPageQuery($storeSlug: String!, $circularId: ID!, $pageNumb
 }
 """
 
+# stores() returns a StoreConnection since mid-2026 — nodes{} wrapper required,
+# Address fields renamed (street/zipcode), distance removed from Store.
 _Q_STORES = """
 query GetStores($zipcode: ZipCode!) {
   stores(zipcode: $zipcode) {
-    code
-    slug
-    name
-    address { line1 city state zip }
-    distance
+    nodes {
+      code
+      slug
+      name
+      address { street city state zipcode }
+    }
   }
 }
 """
@@ -265,7 +268,7 @@ class GiantEagleScraper(BaseScraper):
         if self._store_slug:
             return self._store_slug
         data = self._gql(_Q_STORES, {"zipcode": "46032"})
-        for store in data.get("stores", []):
+        for store in data.get("stores", {}).get("nodes", []):
             if str(store.get("code")) == str(self.store_id):
                 self._store_slug = store["slug"]
                 return self._store_slug
@@ -394,18 +397,18 @@ class GiantEagleScraper(BaseScraper):
         resp.raise_for_status()
         data = resp.json().get("data", {})
         stores = []
-        for s in data.get("stores", []):
+        for s in data.get("stores", {}).get("nodes", []):
             addr = s.get("address", {})
             stores.append(
                 {
                     "code": s.get("code", ""),
                     "slug": s.get("slug", ""),
                     "name": s.get("name", ""),
-                    "address": addr.get("line1", ""),
+                    "address": addr.get("street", ""),
                     "city": addr.get("city", ""),
                     "state": addr.get("state", ""),
-                    "zip": addr.get("zip", ""),
-                    "distance": s.get("distance", ""),
+                    "zip": addr.get("zipcode", ""),
+                    "distance": "",
                 }
             )
         return stores

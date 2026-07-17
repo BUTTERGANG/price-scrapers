@@ -21,7 +21,7 @@ pytestmark = pytest.mark.skipif(
 
 def test_fresh_thyme_search():
     STORES = json.loads(Path("config/stores.json").read_text())
-    store_id = STORES["stores"]["fresh_thyme"]["store_id"]
+    store_id = STORES["stores"]["fresh_thyme"]["locations"][0]["store_id"]
 
     scraper = FreshThymeScraper(store_id=store_id, config={})
     scraper.authenticate()
