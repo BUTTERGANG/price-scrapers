@@ -1,5 +1,11 @@
 # Architecture Review & Technical Debt
 
+> **Historical snapshot (March 2026).** Several "Architectural Concerns" below are now resolved
+> — connection pooling, thread-safe DB access, automated scheduling, and the App.jsx split all
+> shipped (see [04-PRODUCT-ROADMAP.md](04-PRODUCT-ROADMAP.md) for the current checklist). The
+> "What's Working Well" section and Dependency Notes are still broadly accurate; the diagram and
+> concerns list are not.
+
 ## Current Architecture Summary
 
 ```

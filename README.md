@@ -201,6 +201,10 @@ The React frontend provides a full-featured price dashboard at `http://localhost
 | **History** | Price history grouped by retailer |
 | **Stores** | Scraper status, last run times, and a "Run All Scrapers" button |
 
+The header has a dark/light theme toggle and a comfortable/compact density toggle — compact mode shrinks
+product cards (smaller image, tighter padding/text) so more fit per row, for quickly scanning many items
+at once. Both preferences persist to `localStorage`.
+
 ### Running the dashboard
 
 ```bash

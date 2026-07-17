@@ -5,10 +5,10 @@ An automated system for collecting, tracking, and comparing grocery prices acros
 ## Architecture
 
 - **Backend**: FastAPI (Python) — runs on `0.0.0.0:8000`
-- **Frontend**: React + Vite — runs on `0.0.0.0:5000` (proxies `/api` → backend)
+- **Frontend**: React + Vite — runs on `0.0.0.0:5000` (proxies `/api` → backend). Header has dark/light theme and comfortable/compact density toggles (both persisted to `localStorage`, applied via `data-theme`/`data-density` on `<html>`).
 - **Database**: PostgreSQL (NeonDB via `NEONDB1`, fallback to Replit's `DATABASE_URL`)
 - **Scrapers**: 14 modular scrapers in `scrapers/` — 12 working, 2 blocked by bot detection (Walmart, Costco)
-- **Scheduler**: APScheduler inside the FastAPI lifespan — auto-scrape every 6 h (first run 5 min after startup), data cleanup daily at 03:00 UTC. Runs only in the serving process, so uvicorn reload can't duplicate it.
+- **Scheduler**: APScheduler inside the FastAPI lifespan — auto-scrape every 6 h, data cleanup daily at 03:00 UTC. The first fire time is anchored to `MAX(started_at)` from the `runs` table (`_next_auto_scrape_time` in `server.py`), not process-start time — uvicorn's dev reloader restarts the worker (and re-runs the lifespan) on every backend file save, and anchoring to wall-clock-since-restart used to reschedule a fresh scrape 5 min out on *every* reload. During active backend development that produced far more than 4 scrapes/day (observed: 130 runs in one day), risking retailer rate-limiting. Anchoring to the last real run means reloads only trigger an extra scrape if one is actually overdue.
 
 ## Project Structure
 
@@ -16,7 +16,7 @@ An automated system for collecting, tracking, and comparing grocery prices acros
 scrapers/           # Individual store scraper implementations (14 scrapers)
 utils/              # Shared utilities (db, http, browser, unit_price, validate)
 frontend/           # React dashboard (Vite dev server on port 5000)
-  src/App.jsx       #   App shell — tabs, navigation, watchlist state
+  src/App.jsx       #   App shell — tabs, navigation, watchlist state, theme/density toggles
   src/components/   #   One file per view + Shared.jsx (cards, badges, skeletons)
   src/lib/          #   hooks.js (useFetch, useLocalStorage), utils.js (formatters)
 config/             # stores.json, items.json configuration

@@ -1,5 +1,10 @@
 # Quick Wins — High Impact, Low Effort
 
+> **Historical snapshot (March 2026).** All 10 items below appear to have since been implemented
+> (schema-once startup, concurrency guard, shared UI helpers, logged catches, backend-unavailable
+> state, aria-labels, disabled scrape button, retailer count). See
+> [04-PRODUCT-ROADMAP.md](04-PRODUCT-ROADMAP.md) for the maintained status.
+
 Changes that can be made in a single session with immediate user-visible improvement.
 
 ---

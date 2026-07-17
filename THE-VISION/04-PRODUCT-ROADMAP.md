@@ -14,14 +14,14 @@
 
 Focus: Fix critical issues, improve reliability, make what exists work better.
 
-- [ ] **Connection pooling** — Replace per-request connections with a thread pool
-- [ ] **Schema migration on startup only** — Remove `_ensure_schema()` from `get_conn()`
-- [ ] **Scrape concurrency guard** — Prevent duplicate simultaneous scrape runs
-- [ ] **Thread-safe DB access** — One connection per worker thread in runner.py
-- [ ] **Fix CORS configuration** — Remove `allow_credentials=True` or restrict origins
+- [x] **Connection pooling** — Replace per-request connections with a thread pool
+- [x] **Schema migration on startup only** — Remove `_ensure_schema()` from `get_conn()`
+- [x] **Scrape concurrency guard** — Prevent duplicate simultaneous scrape runs
+- [x] **Thread-safe DB access** — One connection per worker thread in runner.py
+- [x] **Fix CORS configuration** — Remove `allow_credentials=True` or restrict origins
 - [ ] **Add basic API response caching** — In-memory TTL cache for dashboard, departments
-- [ ] **Pin dependency versions** — Lock requirements.txt to exact versions
-- [ ] **Error boundaries in React** — Catch rendering errors gracefully
+- [ ] **Pin dependency versions** — Lock requirements.txt to exact versions (still all `>=`)
+- [x] **Error boundaries in React** — Catch rendering errors gracefully (`components/ErrorBoundary.jsx`)
 
 ---
 
@@ -29,14 +29,14 @@ Focus: Fix critical issues, improve reliability, make what exists work better.
 
 Focus: Make the app genuinely useful for daily shopping decisions.
 
-- [ ] **Market Basket Calculator** — "Your basket costs $X at Kroger, $Y at Aldi"
-- [ ] **Price alerts** — Set target prices, get notified when price drops below
-- [ ] **Product images** — Show product thumbnails from scraper APIs
-- [ ] **Better search** — Full-text search with PostgreSQL tsvector, auto-suggest
-- [ ] **Date range filters** — Control time windows on history/trend charts
-- [ ] **Sort options on deals** — By discount %, price, retailer
-- [ ] **Loading skeletons** — Replace spinners with skeleton cards
-- [ ] **Refresh watchlist data** — Fetch current prices for watchlisted items
+- [x] **Market Basket Calculator** — "Your basket costs $X at Kroger, $Y at Aldi"
+- [x] **Price alerts** — Set target prices, get notified when price drops below
+- [x] **Product images** — Show product thumbnails from scraper APIs
+- [x] **Better search** — `pg_trgm` trigram index (better fit than tsvector), auto-suggest
+- [x] **Date range filters** — Control time windows on history/trend charts (`HistoryView.jsx`)
+- [x] **Sort options on deals** — By discount %, price, name (`DealsView.jsx`)
+- [x] **Loading skeletons** — Replace spinners with skeleton cards
+- [x] **Refresh watchlist data** — Fetch current prices for watchlisted items
 
 ---
 
@@ -49,7 +49,7 @@ Focus: Use the historical data to surface insights users can't get elsewhere.
 - [ ] **Seasonal trends** — "Turkey prices drop 40% the week after Thanksgiving"
 - [ ] **Store-specific profiles** — "Aldi is cheapest for staples, Kroger for variety, Fresh Thyme for organic"
 - [ ] **Meal planning integration** — "Chicken breast is cheapest at Aldi this week — here are 3 recipes"
-- [ ] **Automated scheduling** — Scrapers run daily on a cron schedule
+- [x] **Automated scheduling** — Scrapers run every 6h via APScheduler in the FastAPI lifespan; first-fire time is anchored to the last real run (`server.py::_next_auto_scrape_time`) so dev-reload restarts can't multiply runs
 - [ ] **Push notifications** — Via Telegram bot or browser push API
 
 ---
@@ -61,7 +61,7 @@ Focus: Use the historical data to surface insights users can't get elsewhere.
 - [ ] **PWA / Mobile app** — Install as app on phone for quick price checks in-store
 - [ ] **Community features** — User-submitted in-store prices, clearance reports
 - [ ] **Unblock Walmart & Costco** — Residential proxy integration for blocked scrapers
-- [ ] **Component library** — Split App.jsx into proper component structure
+- [x] **Component library** — Split App.jsx into proper component structure (`src/components/` + `src/lib/`)
 - [ ] **API rate limiting** — Protect backend from abuse
 - [ ] **Monitoring / alerting** — Know when scrapers break before users notice
 

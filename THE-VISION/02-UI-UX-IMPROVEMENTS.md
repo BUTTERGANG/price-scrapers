@@ -1,5 +1,12 @@
 # UI/UX Improvement Recommendations
 
+> **Historical snapshot (March 2026).** Most High Priority items (product images, search
+> debounce, mobile nav, price alerts) and several Medium/Lower Priority items (market basket
+> calculator, deal sort, date range picker, loading skeletons, theme toggle) have since shipped
+> — see [04-PRODUCT-ROADMAP.md](04-PRODUCT-ROADMAP.md) for the maintained checklist. Individual
+> items below were not re-verified line-by-line; treat this file as a source of ideas, not a
+> to-do list.
+
 ## High Priority
 
 ### 1. Add Product Images

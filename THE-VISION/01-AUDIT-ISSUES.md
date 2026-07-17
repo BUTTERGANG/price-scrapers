@@ -1,5 +1,10 @@
 # Code Audit: Issues & Bugs Found
 
+> **Historical snapshot (March 2026).** All 16 issues below have since been fixed — verified
+> 2026-07-02. See [00-INDEX.md](00-INDEX.md) status summary and
+> [04-PRODUCT-ROADMAP.md](04-PRODUCT-ROADMAP.md) for current, maintained status. Kept here for
+> historical context only — don't treat anything below as an open issue.
+
 ## Critical Issues
 
 ### 1. Database Connection Leak Risk
