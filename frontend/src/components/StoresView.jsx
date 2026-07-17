@@ -2,6 +2,113 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { API_BASE, timeAgo, fmtPrice, fmtPct, getDeptIcon } from '../lib/utils';
 import { StatusBadge, Spinner, SummaryCard } from './Shared';
 
+function AddStorePanel({ onAdded }) {
+  const [retailers, setRetailers] = useState([]);
+  const [retailer, setRetailer] = useState('');
+  const [zip, setZip] = useState('46220');
+  const [results, setResults] = useState(null);
+  const [searching, setSearching] = useState(false);
+  const [error, setError] = useState(null);
+  const [addedIds, setAddedIds] = useState([]);
+  const [addingId, setAddingId] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/stores/discover`)
+      .then((res) => (res.ok ? res.json() : { discoverable: [] }))
+      .then((data) => {
+        setRetailers(data.discoverable || []);
+        if (data.discoverable?.length) setRetailer(data.discoverable[0]);
+      })
+      .catch(() => setRetailers([]));
+  }, []);
+
+  const search = async () => {
+    setSearching(true);
+    setError(null);
+    setResults(null);
+    try {
+      const res = await fetch(
+        `${API_BASE}/stores/discover?retailer=${encodeURIComponent(retailer)}&zip=${encodeURIComponent(zip)}`
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Store lookup failed');
+      setResults(data.results || []);
+    } catch (err) { setError(err.message); }
+    finally { setSearching(false); }
+  };
+
+  const addStore = async (loc) => {
+    setAddingId(loc.store_id);
+    setError(null);
+    try {
+      const location = { store_id: loc.store_id, name: loc.name, address: loc.address };
+      if (loc.store_slug) location.store_slug = loc.store_slug;
+      if (loc.store_number) location.store_number = loc.store_number;
+      const res = await fetch(`${API_BASE}/stores/locations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ retailer, location }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to add store');
+      setAddedIds((ids) => [...ids, loc.store_id]);
+      onAdded();
+    } catch (err) { setError(err.message); }
+    finally { setAddingId(null); }
+  };
+
+  return (
+    <div className="add-store-panel">
+      <div className="add-store-controls">
+        <label>
+          Retailer
+          <select value={retailer} onChange={(e) => { setRetailer(e.target.value); setResults(null); }}>
+            {retailers.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </label>
+        <label>
+          ZIP
+          <input
+            className="add-store-zip"
+            value={zip}
+            maxLength={5}
+            onChange={(e) => setZip(e.target.value.replace(/\D/g, ''))}
+          />
+        </label>
+        <button className="refresh-btn" onClick={search} disabled={searching || !retailer || zip.length !== 5}>
+          {searching ? 'Searching…' : 'Find Stores'}
+        </button>
+      </div>
+      {error && <div className="error">Error: {error}</div>}
+      {results && results.length === 0 && <div className="empty-hint">No stores found near {zip}.</div>}
+      {results && results.length > 0 && (
+        <div className="discover-list">
+          {results.map((loc) => (
+            <div key={loc.store_id} className="discover-row">
+              <div className="discover-info">
+                <span className="discover-name">{loc.name}</span>
+                <span className="discover-address">{loc.address}</span>
+                <span className="discover-id">store_id: {loc.store_id}</span>
+              </div>
+              {addedIds.includes(loc.store_id) ? (
+                <span className="discover-added">✓ Added</span>
+              ) : (
+                <button
+                  className="scrape-btn"
+                  onClick={() => addStore(loc)}
+                  disabled={addingId === loc.store_id}
+                >
+                  {addingId === loc.store_id ? 'Adding…' : 'Add'}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function StoresView() {
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -10,6 +117,7 @@ export default function StoresView() {
   const [selectedStore, setSelectedStore] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const pollRef = useRef(null);
 
   // Clear any running poll on unmount
@@ -78,7 +186,11 @@ export default function StoresView() {
           {scraping ? 'Starting...' : 'Run All Scrapers'}
         </button>
         <button className="refresh-btn" onClick={fetchStores}>Refresh</button>
+        <button className="refresh-btn" onClick={() => setAddOpen((v) => !v)}>
+          {addOpen ? 'Close' : '＋ Add Store'}
+        </button>
       </div>
+      {addOpen && <AddStorePanel onAdded={fetchStores} />}
       {loading && <Spinner />}
       {error && <div className="error">Error: {error}</div>}
       {!loading && !error && (
@@ -89,6 +201,7 @@ export default function StoresView() {
                 <span className="store-name">{store.retailer}</span>
                 <StatusBadge status={store.status} />
               </div>
+              {store.address && <div className="store-address">{store.address}</div>}
               <div className="store-stats">
                 <div>
                   <span className="stat-label">Records</span>

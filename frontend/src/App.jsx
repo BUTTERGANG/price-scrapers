@@ -33,11 +33,16 @@ function App() {
   const [priceAlerts, setPriceAlerts] = useLocalStorage('price_alerts', {});
   const [moreOpen, setMoreOpen] = useState(false);
   const [theme, setTheme] = useLocalStorage('theme', 'dark');
+  const [density, setDensity] = useLocalStorage('density', 'comfortable');
   const [historyItem, setHistoryItem] = useState(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-density', density);
+  }, [density]);
 
   const alertCount = Object.keys(priceAlerts).length;
 
@@ -62,14 +67,24 @@ function App() {
           <h1>Price Board</h1>
         </div>
         <p>Market basket intelligence &amp; price discovery</p>
-        <button
-          className="theme-toggle"
-          onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-        >
-          {theme === 'dark' ? '☀️' : '🌙'}
-        </button>
+        <div className="header-controls">
+          <button
+            className="density-toggle"
+            onClick={() => setDensity(d => d === 'compact' ? 'comfortable' : 'compact')}
+            aria-label={density === 'compact' ? 'Switch to comfortable view' : 'Switch to compact view'}
+            title={density === 'compact' ? 'Switch to comfortable view' : 'Switch to compact view'}
+          >
+            {density === 'compact' ? '▢' : '▦'}
+          </button>
+          <button
+            className="theme-toggle"
+            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
+        </div>
         <StatusBar />
       </header>
 
