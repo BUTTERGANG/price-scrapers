@@ -61,18 +61,44 @@ def _scheduled_cleanup():
         release_conn(conn)
 
 
+def _next_auto_scrape_time():
+    """First fire time for the auto-scrape job, anchored to the last recorded
+    run instead of process-start time. uvicorn's dev reloader restarts the
+    worker (and re-runs this lifespan) on every backend file save, which would
+    otherwise reset the clock to "5 minutes from now" each time and fire far
+    more than once per 6h during active development — see the runs/day spike
+    this was written to fix.
+    """
+    now = datetime.now(timezone.utc)
+    conn = None
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT MAX(started_at) AS last_started FROM runs")
+            last = cur.fetchone()["last_started"]
+    except Exception:
+        last = None
+    finally:
+        release_conn(conn)
+    if last is None:
+        return now + timedelta(minutes=5)
+    next_run = last + timedelta(hours=6)
+    return next_run if next_run > now else now + timedelta(minutes=5)
+
+
 def _start_scheduler():
     """Start the background scheduler. Returns the scheduler or None on failure."""
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
 
         scheduler = BackgroundScheduler(timezone="UTC")
-        # Scrape every 6 hours, first run 5 minutes after startup
+        # Scrape every 6 hours, anchored to the last actual run (see
+        # _next_auto_scrape_time) so dev-reload restarts don't re-fire it.
         scheduler.add_job(
             _scheduled_scrape,
             "interval",
             hours=6,
-            next_run_time=datetime.now(timezone.utc) + timedelta(minutes=5),
+            next_run_time=_next_auto_scrape_time(),
             id="auto_scrape",
             replace_existing=True,
         )
