@@ -80,3 +80,6 @@ externalPort = 8000
 deploymentTarget = "vm"
 run = ["bash", "-c", "python server.py"]
 build = ["bash", "-c", "pip install -q psycopg2-binary && cd frontend && npm install && npm run build"]
+
+[env]
+CLAUDE_CONFIG_DIR = "/home/runner/workspace/.local/state/claude"
