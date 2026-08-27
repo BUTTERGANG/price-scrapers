@@ -49,6 +49,7 @@ RETAILER_SPECS: tuple[RetailerSpec, ...] = (
     RetailerSpec("giant_eagle", "giant_eagle", "GiantEagleScraper"),
     RetailerSpec("fresh_market", "fresh_market", "FreshMarketScraper"),
     RetailerSpec("needlers", "needlers", "NeedlersScraper", mode="search"),
+    RetailerSpec("trader_joes", "trader_joes", "TraderJoesScraper", mode="search"),
     RetailerSpec(
         "needlers_circular", "needlers_circular", "NeedlersCircularScraper",
         config_key="needlers", store_id_field="store_number",

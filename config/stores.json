@@ -155,6 +155,22 @@
       ],
       "note": "Online prices only — in-warehouse shelf prices not published. Requires Playwright."
     },
+    "trader_joes": {
+      "name": "Trader Joe's",
+      "locations": [
+        {
+          "store_id": "castleton",
+          "name": "Trader Joe's — Castleton",
+          "address": "5473 E 82nd St, Indianapolis, IN 46250"
+        },
+        {
+          "store_id": "w86th",
+          "name": "Trader Joe's — W 86th St",
+          "address": "2902 W 86th St, Indianapolis, IN 46268"
+        }
+      ],
+      "note": "Prices are national (same at all stores). Uses Magento GraphQL API at traderjoes.com/api/graphql behind Akamai WAF — requires curl_cffi with Safari TLS impersonation. No weekly circulars — everyday low pricing via search_products."
+    },
     "needlers": {
       "name": "Needler's Fresh Market",
       "locations": [
