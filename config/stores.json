@@ -25,8 +25,6 @@
     },
     "walmart": {
       "name": "Walmart",
-      "disabled": true,
-      "disabled_reason": "PerimeterX bot detection blocks datacenter IPs. Re-enable with a residential proxy.",
       "locations": [
         {
           "store_id": "2787",
@@ -34,7 +32,7 @@
           "address": "7325 N Keystone Ave, Indianapolis, IN 46240"
         }
       ],
-      "note": "Confirmed via walmart.com/store/2787-indianapolis-in"
+      "note": "Re-enabled 2026-09-14 via real-browser CDP on residential IP. Confirmed store #2787 via walmart.com/store/2787-indianapolis-in. Requires the persistent Brave browser on CDP port 9345 (see scrapers/walmart.py)."
     },
     "meijer": {
       "name": "Meijer",

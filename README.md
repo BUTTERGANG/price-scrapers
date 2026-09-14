@@ -10,7 +10,7 @@ Automated price collection for grocery retailers near **Broad Ripple, Indianapol
 |---|---|---|---|---|
 | Kroger | `01400441` | 2629 E 65th St, Indianapolis 46220 | **Working** | Official public OAuth2 API |
 | Kroger Weekly Ad | `02100959` / `02100998` | — | **Working** | DACS public API (no credentials) |
-| Walmart | `2787` | 7325 N Keystone Ave, Indianapolis 46240 | **Blocked** | `curl_cffi` (safari17_0) + `__NEXT_DATA__` HTML parsing — bot detection from datacenter IPs |
+| Walmart | `2787` | 7325 N Keystone Ave, Indianapolis 46240 | **Working** | Real-browser CDP (`__NEXT_DATA__` JSON) on persistent headed Brave + residential IP |
 | Fresh Thyme | `rsid=208` | 6301 N College Ave, Indianapolis 46220 | **Working** | HTML parsing (search) + Flipp REST API (circular) |
 | Meijer | `290` | 5550 N Keystone Ave, Indianapolis 46220 | **Working** | `curl_cffi` + AEM JSON API + Flipp REST API (circular) |
 | Costco | `346` | 6110 E 86th St, Indianapolis 46250 | **Blocked** | Playwright stealth → intercept `search.costco.com` ⚠️ online prices only — bot detection from datacenter IPs |
@@ -41,7 +41,7 @@ PRICE_SCRAPERS/
 ├── scrapers/
 │   ├── base.py               # Abstract base class — shared interface & error handling
 │   ├── kroger.py             # Kroger — official OAuth2 API + DACS weekly circular
-│   ├── walmart.py            # Walmart — curl_cffi (safari17_0) + __NEXT_DATA__ parsing
+│   ├── walmart.py            # Walmart — real-browser CDP (__NEXT_DATA__ JSON), residential IP
 │   ├── meijer.py             # Meijer — AEM JSON endpoints + Flipp circular
 │   ├── fresh_thyme.py        # Fresh Thyme — server-rendered HTML + Flipp circular
 │   ├── costco.py             # Costco — Playwright intercept of search API
@@ -364,16 +364,11 @@ The weekly circular is available via Kroger's DACS (Digital Ads & Coupons System
 
 ### Walmart
 
-- **Method:** `__NEXT_DATA__` JSON blob embedded in every search/product page
-- **TLS fingerprinting (2026):** Chrome TLS profiles are now fully blocked by Walmart's PerimeterX stack. `curl_cffi` must use `safari17_0` or `safari15_5` impersonation (`safari16_5` is broken in current curl_cffi). `chrome*` profiles return a "Robot or human?" challenge page with no product data.
-- **Environment note:** Walmart actively blocks datacenter/cloud IPs (including Replit). Requires a residential proxy or local execution to bypass bot detection.
-- **Session warmup:** Hits homepage first to receive Akamai validation cookies (`bm_sz`, `_abck`)
-- **Store pricing:** Set via `assortment_store_id` cookie
-- **Price schema (2026 changes):**
-  - `priceInfo.currentPrice` is now often `None` — actual price is top-level `item["price"]` (float)
-  - `priceInfo.unitPrice` changed from `{unitString, price}` dict to display string (e.g. `"5.4 ¢/fl oz"`)
-  - `priceInfo.wasPrice` changed from dict to dollar string (e.g. `"$22.99"`) — indicates item is on sale; `wasPrice` = regular price, `item["price"]` = sale price
-- **Store ID:** Find at walmart.com store finder → URL contains `storeId=XXXX`
+- **Method:** `__NEXT_DATA__` JSON blob embedded in every search/product page, read via a **real headed browser** driven over CDP (`BrowserSession(cdp_url=http://127.0.0.1:9345)`) on a **residential IP**.
+- **Access history (2026-09-14):** Walmart still challenges any direct `curl_cffi`/`requests` TLS-fingerprint call — even from a residential IP — by serving a "Robot or human?" Page. But a **real (non-headless) browser on a residential IP** loads the page normally, and Walmart embeds the full first-page result set (`usItemId`, `name`, `price`, `priceInfo.wasPrice` for sales, `canonicalUrl`, per-item availability) as a large JSON `__NEXT_DATA__` script.
+- **Requirements:** a persistent minimized Brave browser on CDP port 9345 (launched once with `--start-minimized --remote-debugging-port=9345 --user-data-dir=...`) plus `browser-use` installed in the venv. The scraper attaches to it and reuses the tab — never launches its own browser (no window popping).
+- **Store pricing:** Set via the `store` query param (`store=2787`) plus the `assortment_store_id` cookie set in the persistent browser profile.
+- **Price schema (2026 changes):** price lives at top-level `item["price"]` (float); `priceInfo.currentPrice` is often `None`. `priceInfo.wasPrice` (dollar string) indicates a sale — `wasPrice` = regular price, `item["price"]` = sale price. `priceInfo.unitPrice` is a display string like `"5.4 ¢/fl oz"`. Brand may be `None` at item level (use `productBrand`/`sellerName`).
 
 ### Meijer
 
@@ -587,10 +582,10 @@ All use the same two-step flow: list publications → fetch items. All filter `i
 
 | Technique | Applied To | Why |
 |---|---|---|
-| `curl_cffi` Safari TLS impersonation (`safari17_0`) | Walmart | Chrome TLS fingerprints fully blocked by PerimeterX as of early 2026; Safari bypasses it |
+| Real (non-headless) browser over CDP on residential IP | Walmart | Direct `curl_cffi`/`requests` gets PX challenge; a real headed browser on a residential IP loads results normally (read `__NEXT_DATA__`) |
 | `curl_cffi` Chrome TLS impersonation | Meijer (product search), The Fresh Market, Whole Foods, Giant Eagle | Akamai/Cloudflare/Amazon Varnish checks JA3/JA4 fingerprint; `requests` is blocked |
 | `playwright-stealth` | Costco | Removes `navigator.webdriver`, adds chrome runtime/plugins |
-| Homepage session warmup | Walmart | Akamai sets validation cookies (`bm_sz`, `_abck`) on first visit |
+| Homepage session warmup | Meijer (legacy) | Akamai sets validation cookies (`bm_sz`, `_abck`) on first visit |
 | `dsr_id` store cookie selection | GFS | All ad pages redirect to store selector unless `wp-MyStore` cookie is set via `/?dsr_id=MP153` |
 | `jitter_sleep()` ±40% variance | All scrapers | Fixed-interval requests are a bot signal |
 | `sec-ch-ua`, `sec-fetch-*` headers | `curl_cffi` sessions | Absent headers flag non-browser clients |

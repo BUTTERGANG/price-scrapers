@@ -6,8 +6,8 @@
 
 | Status | Count | Details |
 |--------|-------|---------|
-| Working | 13 | Actively returning data |
-| Blocked | 2 | Walmart (PerimeterX), Costco (strict bot detection) |
+| Working | 14 | Actively returning data, incl. Walmart (re-enabled 2026-09-14 via real-browser CDP) |
+| Blocked | 1 | Costco (strict bot detection) |
 
 ---
 
@@ -34,7 +34,7 @@
 
 | Scraper | Method | Block Reason | Potential Fix |
 |---------|--------|--------------|---------------|
-| **Walmart** | curl_cffi (safari17_0) | PerimeterX bot detection from datacenter IPs | Residential proxy ($10-30/mo). The TLS fingerprinting works — it's the IP reputation that's blocked |
+| **Walmart** | Real-browser CDP | ✅ Unblocked 2026-09-14 — direct curl_cffi gets PX challenge, but a real headed browser on a residential IP loads results normally | Keep the persistent Brave browser (CDP :9345) running on the residential IP; `browser-use` must be installed in the venv |
 | **Costco** | Playwright stealth | Strict bot detection, JS challenges | Residential proxy + Playwright. Note: only returns online/delivery prices anyway — in-warehouse shelf prices are not available online |
 
 ### Scraper Risk Assessment

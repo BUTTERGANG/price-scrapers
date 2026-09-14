@@ -24,8 +24,8 @@ def test_real_config_produces_expected_keys(stores, monkeypatch):
         assert single in keys
     # Vision circular registers when the API key is present
     assert "needlers_circular" in keys
-    # Disabled retailers are excluded
-    assert "walmart" not in keys
+    # Walmart re-enabled 2026-09-14 (real-browser CDP on residential IP); Costco still blocked
+    assert "walmart" in keys
     assert "costco" not in keys
 
 
@@ -98,8 +98,10 @@ def test_unknown_platform_skipped():
 def test_expected_stores_includes_disabled(stores):
     expected = expected_stores(stores)
     by_key = {e["key"]: e for e in expected}
-    assert by_key["walmart"]["disabled"] is True
-    assert "PerimeterX" in by_key["walmart"]["disabled_reason"]
+    # Walmart re-enabled 2026-09-14; Costco still blocked by bot detection
+    assert by_key["walmart"]["disabled"] is False
+    assert by_key["costco"]["disabled"] is True
+    assert "bot detection" in (by_key["costco"]["disabled_reason"] or "").lower()
     assert by_key["aldi"]["disabled"] is False
     assert by_key["fresh_market_146th"]["store_id"] == "56"
 
