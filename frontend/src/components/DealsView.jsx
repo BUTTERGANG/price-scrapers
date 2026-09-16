@@ -1,9 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useFetch } from '../lib/hooks';
 import { API_BASE, THIRTY_MIN, timeAgo } from '../lib/utils';
 import { ProductCard, SkeletonGrid, DataFreshnessBar } from './Shared';
 
 export default function DealsView({ watchlist, toggleWatchlist, onHistoryClick }) {
+  // Load more / pagination: render a window first, "Load more" reveals the rest.
+  const PAGE_SIZE = 60;
+  const [visible, setVisible] = useState({});   // { groupKey: extraCount } revealed
   const [minPct, setMinPct] = useState(10);
   const [deptFilter, setDeptFilter] = useState('');
   const [groupBy, setGroupBy] = useState('none');
@@ -48,6 +51,14 @@ export default function DealsView({ watchlist, toggleWatchlist, onHistoryClick }
   }, [filtered, groupBy]);
 
   const watchedIds = new Set(watchlist.map(w => `${w.retailer}::${w.product_id}`));
+
+  // Reset pagination whenever any filter/sort/grouping changes a new result set.
+  useEffect(() => { setVisible({}); }, [minPct, maxAgeDays, deptFilter, groupBy, showPromo, sortOrder]);
+
+  const loadMore = (group) => {
+    setVisible(v => ({ ...v, [group]: (v[group] || 0) + PAGE_SIZE }));
+  };
+  const shownCount = (group, total) => Math.min(total, PAGE_SIZE + (visible[group] || 0));
 
   return (
     <div>
@@ -119,22 +130,33 @@ export default function DealsView({ watchlist, toggleWatchlist, onHistoryClick }
           )}
         </div>
       )}
-      {!loading && !error && Object.entries(grouped).map(([group, items]) => (
-        <div key={group}>
-          {groupBy !== 'none' && <h3 className="group-heading">{group} <span className="group-count">({items.length})</span></h3>}
-          <div className="grid">
-            {items.map((item, idx) => (
-              <ProductCard
-                key={`${item.retailer}-${item.product_id}-${idx}`}
-                item={item}
-                onWatchlist={toggleWatchlist}
-                isWatched={watchedIds.has(`${item.retailer}::${item.product_id}`)}
-                onHistoryClick={onHistoryClick}
-              />
-            ))}
+      {!loading && !error && Object.entries(grouped).map(([group, items]) => {
+        const count = shownCount(group, items.length);
+        const more = items.length - count;
+        return (
+          <div key={group}>
+            {groupBy !== 'none' && <h3 className="group-heading">{group} <span className="group-count">({items.length})</span></h3>}
+            <div className="grid">
+              {items.slice(0, count).map((item, idx) => (
+                <ProductCard
+                  key={`${item.retailer}-${item.product_id}-${idx}`}
+                  item={item}
+                  onWatchlist={toggleWatchlist}
+                  isWatched={watchedIds.has(`${item.retailer}::${item.product_id}`)}
+                  onHistoryClick={onHistoryClick}
+                />
+              ))}
+            </div>
+            {more > 0 && (
+              <div className="load-more-wrap">
+                <button className="load-more-btn" onClick={() => loadMore(group)}>
+                  Load more{groupBy !== 'none' ? ` in ${group}` : ''} ({more} more)
+                </button>
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

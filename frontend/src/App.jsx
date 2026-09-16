@@ -25,10 +25,17 @@ const TABS = [
   { id: 'stores',      label: 'Stores',       icon: '🏪' },
 ];
 
-const PRIMARY_TABS = ['dashboard', 'deals', 'search', 'watchlist', 'stores'];
-const OVERFLOW_TABS = ['compare', 'history', 'departments'];
+const PRIMARY_TABS = ['dashboard', 'deals', 'search', 'compare', 'watchlist', 'stores'];
+const OVERFLOW_TABS = ['history', 'departments'];
+
+// Read the active tab from the URL hash (e.g. #compare) so tabs are deep-linkable.
+function tabFromHash() {
+  const h = window.location.hash.replace(/^#\/?/, '').trim();
+  return TABS.some(t => t.id === h) ? h : 'dashboard';
+}
+
 function App() {
-  const [tab, setTab] = useState('dashboard');
+  const [tab, setTab] = useState(tabFromHash);
   const [watchlist, setWatchlist] = useLocalStorage('watchlist', []);
   const [priceAlerts, setPriceAlerts] = useLocalStorage('price_alerts', {});
   const [moreOpen, setMoreOpen] = useState(false);
@@ -43,6 +50,19 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-density', density);
   }, [density]);
+
+  // Keep the URL hash in sync with the active tab (deep-linking + back/forward).
+  useEffect(() => {
+    const target = `#${tab}`;
+    if (window.location.hash !== target) window.location.hash = tab;
+  }, [tab]);
+
+  // React to manual hash edits / browser back-forward so the tab stays in sync.
+  useEffect(() => {
+    const onHashChange = () => setTab(tabFromHash());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   const alertCount = Object.keys(priceAlerts).length;
 
