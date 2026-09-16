@@ -2,11 +2,12 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { useFetch } from '../lib/hooks';
-import { API_BASE, THIRTY_MIN, fmtPct } from '../lib/utils';
+import { API_BASE, THIRTY_MIN, fmtPct, chartTheme } from '../lib/utils';
 import { Spinner, SummaryCard, DataFreshnessBar } from './Shared';
 
 export default function DashboardView({ onNavigate }) {
   const { data, loading, error, lastFetched } = useFetch(`${API_BASE}/dashboard`, THIRTY_MIN);
+  const ct = chartTheme();
 
   if (loading) return <Spinner />;
   if (error) return <div className="error">Error: {error}</div>;
@@ -61,12 +62,12 @@ export default function DashboardView({ onNavigate }) {
                   <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-              <XAxis dataKey="day" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => v.slice(5)} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} vertical={false} />
+              <XAxis dataKey="day" tick={{ fill: ct.tick, fontSize: 11 }} tickFormatter={v => v.slice(5)} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: ct.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
               <Tooltip
-                contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#f1f5f9', fontSize: 13 }}
-                cursor={{ stroke: 'rgba(255,255,255,0.08)', strokeWidth: 1 }}
+                contentStyle={{ background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 10, color: ct.tooltipColor, fontSize: 13 }}
+                cursor={{ stroke: ct.cursorStroke, strokeWidth: 1 }}
               />
               <Area type="monotone" dataKey="records" stroke="#3b82f6" strokeWidth={2} fill="url(#gradRecords)" name="Records" dot={false} />
               <Area type="monotone" dataKey="runs" stroke="#8b5cf6" strokeWidth={2} fill="url(#gradRuns)" name="Runs" dot={false} />

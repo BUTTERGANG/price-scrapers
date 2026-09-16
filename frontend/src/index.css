@@ -28,6 +28,15 @@
   --yellow: #f59e0b;
   --yellow-subtle: rgba(245, 158, 11, 0.08);
 
+  /* Chart theming (read at render time by Recharts via chartTheme()) */
+  --chart-axis: #64748b;
+  --chart-grid: rgba(255, 255, 255, 0.06);
+  --chart-cursor-stroke: rgba(255, 255, 255, 0.08);
+  --chart-cursor-fill: rgba(255, 255, 255, 0.04);
+  --chart-tooltip-bg: #0f172a;
+  --chart-tooltip-border: rgba(255, 255, 255, 0.1);
+  --chart-tooltip-color: #f1f5f9;
+
   /* Card system */
   --card-bg: rgba(15, 23, 42, 0.8);
   --card-bg-hover: rgba(20, 30, 55, 0.9);
@@ -68,6 +77,15 @@
   --green-subtle: rgba(34, 197, 94, 0.1);
   --red-subtle: rgba(239, 68, 68, 0.1);
   --yellow-subtle: rgba(245, 158, 11, 0.1);
+
+  /* Chart colors tuned for light backgrounds (high contrast axes/tooltips) */
+  --chart-axis: #475569;
+  --chart-grid: rgba(0, 0, 0, 0.12);
+  --chart-cursor-stroke: rgba(0, 0, 0, 0.12);
+  --chart-cursor-fill: rgba(0, 0, 0, 0.05);
+  --chart-tooltip-bg: #ffffff;
+  --chart-tooltip-border: rgba(0, 0, 0, 0.15);
+  --chart-tooltip-color: #0f172a;
 }
 
 [data-theme="light"] body {
@@ -2752,4 +2770,72 @@ header p {
   font-size: 0.75rem;
   color: var(--text-secondary);
   margin: -0.6rem 0 0.9rem;
+}
+
+/* ── Toast (watchlist feedback + undo) ──────────────────────────────────────── */
+
+.toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 360px;
+  padding: 0.75rem 1rem;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  box-shadow: var(--card-shadow-hover);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: toastIn 0.25s ease;
+}
+
+[data-theme="light"] .toast {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(0, 0, 0, 0.14);
+  color: var(--text-primary);
+}
+
+.toast-msg {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.toast-undo {
+  background: transparent;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition-fast);
+}
+
+.toast-undo:hover {
+  background: var(--accent-subtle);
+}
+
+/* ── Light-theme overrides for toast edgecases ─────────────────────────────── */
+[data-theme="light"] .toast-undo {
+  color: #1d4ed8;
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="light"] .toast-undo:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }

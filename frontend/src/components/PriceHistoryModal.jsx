@@ -3,10 +3,11 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import { useFetch } from '../lib/hooks';
-import { API_BASE, fmtPrice, priceSignal } from '../lib/utils';
+import { API_BASE, fmtPrice, priceSignal, chartTheme } from '../lib/utils';
 import { Spinner } from './Shared';
 
 export default function PriceHistoryModal({ item, onClose }) {
+  const ct = chartTheme();
   const { retailer, product_id, name } = item;
   const url = retailer && product_id
     ? `${API_BASE}/history?retailer=${encodeURIComponent(retailer)}&product_id=${encodeURIComponent(product_id)}&limit=500`
@@ -91,23 +92,23 @@ export default function PriceHistoryModal({ item, onClose }) {
 
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={stats.chrono} margin={{ top: 8, right: 12, bottom: 0, left: -10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} vertical={false} />
                 <XAxis
                   dataKey="date"
-                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  tick={{ fill: ct.tick, fontSize: 11 }}
                   tickFormatter={v => new Date(v).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  tick={{ fill: ct.tick, fontSize: 11 }}
                   tickFormatter={v => `$${v.toFixed(2)}`}
                   axisLine={false}
                   tickLine={false}
                   domain={stats.yDomain}
                 />
                 <Tooltip
-                  contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#f1f5f9', fontSize: 13 }}
+                  contentStyle={{ background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 10, color: ct.tooltipColor, fontSize: 13 }}
                   labelFormatter={v => new Date(v).toLocaleString()}
                   formatter={v => [fmtPrice(v), 'Price']}
                 />

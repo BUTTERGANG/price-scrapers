@@ -2,10 +2,11 @@ import { useState, useMemo } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { API_BASE, CHART_COLORS, fmtPrice, fmtUnitPrice } from '../lib/utils';
+import { API_BASE, CHART_COLORS, fmtPrice, fmtUnitPrice, chartTheme } from '../lib/utils';
 import { Spinner } from './Shared';
 
 export default function HistoryView() {
+  const ct = chartTheme();
   const [query, setQuery] = useState('');
   const [history, setHistory] = useState([]);
   const [trends, setTrends] = useState([]);
@@ -111,10 +112,10 @@ export default function HistoryView() {
           <h3>Price Trends — {query}</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData.data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-              <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 12 }} tickFormatter={v => v.slice(5)} />
-              <YAxis tick={{ fill: '#94a3b8', fontSize: 12 }} tickFormatter={v => `$${v}`} />
-              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, color: '#f8fafc' }} formatter={v => fmtPrice(v)} />
+              <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
+              <XAxis dataKey="date" tick={{ fill: ct.tick, fontSize: 12 }} tickFormatter={v => v.slice(5)} />
+              <YAxis tick={{ fill: ct.tick, fontSize: 12 }} tickFormatter={v => `$${v}`} />
+              <Tooltip contentStyle={{ background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 8, color: ct.tooltipColor }} formatter={v => fmtPrice(v)} />
               <Legend />
               {chartData.retailers.map((r, i) => (
                 <Line key={r} type="monotone" dataKey={r} stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2} dot={false} connectNulls />

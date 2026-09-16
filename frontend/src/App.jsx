@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import './index.css';
 
 import { useLocalStorage } from './lib/hooks';
@@ -42,6 +42,16 @@ function App() {
   const [theme, setTheme] = useLocalStorage('theme', 'dark');
   const [density, setDensity] = useLocalStorage('density', 'comfortable');
   const [historyItem, setHistoryItem] = useState(null);
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+
+  // Show a transient toast with an optional Undo action (used by watchlist
+  // add/remove so the star toggle gives visible feedback and is reversible).
+  const showToast = (message, onUndo) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, onUndo });
+    toastTimerRef.current = setTimeout(() => setToast(null), 5000);
+  };
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -71,13 +81,22 @@ function App() {
   }, []);
 
   const toggleWatchlist = useCallback((item) => {
+    const key = `${item.retailer}::${item.product_id}`;
+    const displayName = item.name || 'this item';
+    const wasWatched = watchlist.some(w => `${w.retailer}::${w.product_id}` === key);
     setWatchlist(prev => {
-      const key = `${item.retailer}::${item.product_id}`;
       const exists = prev.some(w => `${w.retailer}::${w.product_id}` === key);
       if (exists) return prev.filter(w => `${w.retailer}::${w.product_id}` !== key);
       return [...prev, { retailer: item.retailer, product_id: item.product_id, name: item.name }];
     });
-  }, [setWatchlist]);
+    if (wasWatched) {
+      showToast(`Removed "${displayName}" from watchlist`, () =>
+        setWatchlist(prev => [...prev, { retailer: item.retailer, product_id: item.product_id, name: item.name }]));
+    } else {
+      showToast(`Added "${displayName}" to watchlist`, () =>
+        setWatchlist(prev => prev.filter(w => `${w.retailer}::${w.product_id}` !== key)));
+    }
+  }, [setWatchlist, watchlist]);
 
   return (
     <>
@@ -189,6 +208,20 @@ function App() {
 
       {historyItem && (
         <PriceHistoryModal item={historyItem} onClose={() => setHistoryItem(null)} />
+      )}
+
+      {toast && (
+        <div className="toast" role="status" aria-live="polite">
+          <span className="toast-msg">{toast.message}</span>
+          {toast.onUndo && (
+            <button
+              className="toast-undo"
+              onClick={() => { toast.onUndo(); setToast(null); if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }}
+            >
+              Undo
+            </button>
+          )}
+        </div>
       )}
     </>
   );

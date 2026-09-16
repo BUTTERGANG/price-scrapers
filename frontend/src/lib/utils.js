@@ -31,6 +31,36 @@ export const fmtUnitPrice = (value, canonical) => {
 
 export const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#84cc16'];
 
+// Resolve the theme-aware chart colors on demand. Recharts emits SVG attributes
+// (fill/stroke/background) directly, so `var(--chart-*)` won't resolve inside a
+// chart. Instead we read the resolved custom properties off <html> — which
+// carries data-theme="light"/"dark" — and hand Recharts concrete color strings.
+// Call this fresh on each render so a theme toggle re-picks the right palette
+// (theme state lives in App.jsx, so chart components re-render on toggle).
+let _chartThemeTheme = null;
+let _chartTheme = null;
+export function chartTheme() {
+  const root = document.documentElement;
+  const theme = root.getAttribute('data-theme') || 'dark';
+  if (_chartTheme && _chartThemeTheme === theme) return _chartTheme;
+  const cs = getComputedStyle(root);
+  const v = (name, fallback) => {
+    const val = cs.getPropertyValue(name).trim();
+    return val || fallback;
+  };
+  _chartThemeTheme = theme;
+  _chartTheme = {
+    tick: v('--chart-axis', '#64748b'),
+    grid: v('--chart-grid', 'rgba(255,255,255,0.06)'),
+    cursorStroke: v('--chart-cursor-stroke', 'rgba(255,255,255,0.08)'),
+    cursorFill: v('--chart-cursor-fill', 'rgba(255,255,255,0.04)'),
+    tooltipBg: v('--chart-tooltip-bg', '#0f172a'),
+    tooltipBorder: v('--chart-tooltip-border', 'rgba(255,255,255,0.1)'),
+    tooltipColor: v('--chart-tooltip-color', '#f1f5f9'),
+  };
+  return _chartTheme;
+}
+
 export const RETAILER_COLORS = {
   'kroger':        '#0072CE',
   'meijer':        '#e01933',

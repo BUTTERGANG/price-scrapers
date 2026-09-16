@@ -3,7 +3,7 @@ import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { useLocalStorage } from '../lib/hooks';
-import { API_BASE, fmtPrice, timeAgo, freshnessLevel } from '../lib/utils';
+import { API_BASE, fmtPrice, timeAgo, freshnessLevel, chartTheme } from '../lib/utils';
 import { Spinner } from './Shared';
 
 const STANDARD_GROCERY_LIST = [
@@ -12,6 +12,7 @@ const STANDARD_GROCERY_LIST = [
 ];
 
 export default function CompareView() {
+  const ct = chartTheme();
   const [query, setQuery] = useState('');
   // result is the /api/compare/standard payload:
   // { standard_unit, standard_unit_display, comparable[], comparable_count,
@@ -168,12 +169,12 @@ export default function CompareView() {
                         <stop offset="100%" stopColor="#6366f1" stopOpacity={0.8} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `$${v.toFixed(2)}`} axisLine={false} tickLine={false} />
-                    <YAxis type="category" dataKey="retailer" tick={{ fill: '#94a3b8', fontSize: 11, fontWeight: 600 }} width={110} axisLine={false} tickLine={false} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} horizontal={false} />
+                    <XAxis type="number" tick={{ fill: ct.tick, fontSize: 11 }} tickFormatter={v => `$${v.toFixed(2)}`} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="retailer" tick={{ fill: ct.tick, fontSize: 11, fontWeight: 600 }} width={110} axisLine={false} tickLine={false} />
                     <Tooltip
-                      contentStyle={{ background: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, color: '#f1f5f9', fontSize: 13 }}
-                      cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                      contentStyle={{ background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 10, color: ct.tooltipColor, fontSize: 13 }}
+                      cursor={{ fill: ct.cursorFill }}
                       formatter={v => [`${fmtPrice(v)} ${stdLabelShort}`, unitLabel]}
                     />
                     <Bar dataKey="price" fill="url(#barGrad)" radius={[0, 6, 6, 0]}>
