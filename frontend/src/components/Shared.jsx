@@ -1,14 +1,15 @@
 import { getRetailerColor, fmtUnitPrice, timeAgo, freshnessLevel } from '../lib/utils';
+import { GREEN, YELLOW, ORANGE, RED, BLUE, SLATE } from '../lib/colors';
 
 export function StatusBadge({ status }) {
   const styles = {
-    success:   { bg: 'rgba(34,197,94,0.15)',   color: '#4ade80',  border: 'rgba(34,197,94,0.3)',   dot: '#22c55e' },
-    partial:   { bg: 'rgba(250,204,21,0.15)',   color: '#fde047',  border: 'rgba(250,204,21,0.3)',  dot: '#eab308' },
-    empty:     { bg: 'rgba(249,115,22,0.15)',   color: '#fdba74',  border: 'rgba(249,115,22,0.3)',  dot: '#f97316' },
-    failed:    { bg: 'rgba(239,68,68,0.15)',    color: '#fca5a5',  border: 'rgba(239,68,68,0.3)',   dot: '#ef4444' },
-    running:   { bg: 'rgba(59,130,246,0.15)',   color: '#93c5fd',  border: 'rgba(59,130,246,0.3)',  dot: '#3b82f6' },
-    disabled:  { bg: 'rgba(100,116,139,0.12)',  color: '#94a3b8',  border: 'rgba(100,116,139,0.2)', dot: '#64748b' },
-    never_run: { bg: 'rgba(100,116,139,0.12)',  color: '#94a3b8',  border: 'rgba(100,116,139,0.2)', dot: '#64748b' },
+    success:   { bg: 'rgba(34,197,94,0.15)',   color: '#4ade80',  border: 'rgba(34,197,94,0.3)',   dot: GREEN },
+    partial:   { bg: 'rgba(250,204,21,0.15)',   color: '#fde047',  border: 'rgba(250,204,21,0.3)',  dot: YELLOW },
+    empty:     { bg: 'rgba(249,115,22,0.15)',   color: '#fdba74',  border: 'rgba(249,115,22,0.3)',  dot: ORANGE },
+    failed:    { bg: 'rgba(239,68,68,0.15)',    color: '#fca5a5',  border: 'rgba(239,68,68,0.3)',   dot: RED },
+    running:   { bg: 'rgba(59,130,246,0.15)',   color: '#93c5fd',  border: 'rgba(59,130,246,0.3)',  dot: BLUE },
+    disabled:  { bg: 'rgba(100,116,139,0.12)',  color: '#94a3b8',  border: 'rgba(100,116,139,0.2)', dot: SLATE },
+    never_run: { bg: 'rgba(100,116,139,0.12)',  color: '#94a3b8',  border: 'rgba(100,116,139,0.2)', dot: SLATE },
   };
   const s = styles[status] || styles.never_run;
   const LABELS = { never_run: 'Never Run', empty: 'No Data', disabled: 'Disabled' };

@@ -3,6 +3,7 @@ import {
 } from 'recharts';
 import { useFetch } from '../lib/hooks';
 import { API_BASE, THIRTY_MIN, fmtPct, chartTheme } from '../lib/utils';
+import { BLUE, INDIGO, GREEN, GREEN_DARK, AMBER, AMBER_DARK, PURPLE } from '../lib/colors';
 import { Spinner, SummaryCard, DataFreshnessBar } from './Shared';
 
 export default function DashboardView({ onNavigate }) {
@@ -22,28 +23,28 @@ export default function DashboardView({ onNavigate }) {
           label="Products Tracked"
           value={summary.unique_products?.toLocaleString()}
           icon="📦"
-          accent="linear-gradient(90deg, #3b82f6, #6366f1)"
+          accent={`linear-gradient(90deg, ${BLUE}, ${INDIGO})`}
         />
         <SummaryCard
           label="Active Deals"
           value={summary.active_deals?.toLocaleString()}
           color="var(--green)"
           icon="🏷️"
-          accent="linear-gradient(90deg, #22c55e, #16a34a)"
+          accent={`linear-gradient(90deg, ${GREEN}, ${GREEN_DARK})`}
         />
         <SummaryCard
           label="Avg Savings"
           value={fmtPct(summary.avg_savings_pct)}
-          color="#f59e0b"
+          color={AMBER}
           icon="💰"
-          accent="linear-gradient(90deg, #f59e0b, #d97706)"
+          accent={`linear-gradient(90deg, ${AMBER}, ${AMBER_DARK})`}
         />
         <SummaryCard
           label="Retailers"
           value={summary.retailer_count}
           color="var(--accent)"
           icon="🏪"
-          accent="linear-gradient(90deg, #8b5cf6, #6366f1)"
+          accent={`linear-gradient(90deg, ${PURPLE}, ${INDIGO})`}
         />
       </div>
 
@@ -54,12 +55,12 @@ export default function DashboardView({ onNavigate }) {
             <AreaChart data={activity} margin={{ top: 4, right: 4, bottom: 0, left: -10 }}>
               <defs>
                 <linearGradient id="gradRecords" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.35} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor={BLUE} stopOpacity={0.35} />
+                  <stop offset="95%" stopColor={BLUE} stopOpacity={0.02} />
                 </linearGradient>
                 <linearGradient id="gradRuns" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.02} />
+                  <stop offset="5%" stopColor={PURPLE} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={PURPLE} stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} vertical={false} />
@@ -69,8 +70,8 @@ export default function DashboardView({ onNavigate }) {
                 contentStyle={{ background: ct.tooltipBg, border: `1px solid ${ct.tooltipBorder}`, borderRadius: 10, color: ct.tooltipColor, fontSize: 13 }}
                 cursor={{ stroke: ct.cursorStroke, strokeWidth: 1 }}
               />
-              <Area type="monotone" dataKey="records" stroke="#3b82f6" strokeWidth={2} fill="url(#gradRecords)" name="Records" dot={false} />
-              <Area type="monotone" dataKey="runs" stroke="#8b5cf6" strokeWidth={2} fill="url(#gradRuns)" name="Runs" dot={false} />
+              <Area type="monotone" dataKey="records" stroke={BLUE} strokeWidth={2} fill="url(#gradRecords)" name="Records" dot={false} />
+              <Area type="monotone" dataKey="runs" stroke={PURPLE} strokeWidth={2} fill="url(#gradRuns)" name="Runs" dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>

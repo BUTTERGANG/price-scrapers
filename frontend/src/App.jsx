@@ -74,6 +74,16 @@ function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
+  // Let Escape dismiss the mobile "More" drawer while it's open.
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setMoreOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [moreOpen]);
+
   const alertCount = Object.keys(priceAlerts).length;
 
   const openHistory = useCallback((retailer, product_id, name) => {
@@ -177,7 +187,19 @@ function App() {
       {/* More drawer */}
       {moreOpen && (
         <>
-          <div className="more-overlay" onClick={() => setMoreOpen(false)} />
+          <div
+            className="more-overlay"
+            role="button"
+            tabIndex={0}
+            aria-label="Close menu"
+            onClick={() => setMoreOpen(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setMoreOpen(false);
+              }
+            }}
+          />
           <div className="more-drawer">
             {TABS.filter(t => OVERFLOW_TABS.includes(t.id)).map(t => (
               <button
